@@ -34,9 +34,17 @@ class PlanStore(context: Context) {
     }
 
     fun themeMode(): String = preferences.getString("theme_mode", "system") ?: "system"
-    fun accent(): String = preferences.getString("accent", "bosque") ?: "bosque"
+    fun accent(): String = when (val saved = preferences.getString("accent", "bosque") ?: "bosque") {
+        "turquesa" -> "fucsia"
+        else -> saved
+    }
     fun saveAppearance(mode: String, accent: String) {
         preferences.edit { putString("theme_mode", mode); putString("accent", accent) }
+    }
+
+    fun bibleVersion(): String = preferences.getString("bible_version", "RVC") ?: "RVC"
+    fun saveBibleVersion(version: String) {
+        preferences.edit { putString("bible_version", version) }
     }
 
     private fun encodePlan(plan: ReadingPlan) = JSONObject().apply {

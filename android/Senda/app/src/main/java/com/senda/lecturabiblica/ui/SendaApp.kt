@@ -76,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -85,7 +86,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.senda.lecturabiblica.AppUiState
 import com.senda.lecturabiblica.AppViewModel
+import com.senda.lecturabiblica.R
 import com.senda.lecturabiblica.data.BibleData
+import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.domain.youVersionUrl
 import com.senda.lecturabiblica.model.DayPlan
 import com.senda.lecturabiblica.model.DayStatus
@@ -103,8 +106,12 @@ private val spanish = Locale.forLanguageTag("es-ES")
 private val longDate = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", spanish)
 private val shortDate = DateTimeFormatter.ofPattern("d MMM", spanish)
 
-private enum class Destination(val label: String, val glyph: String) {
-    DAY("Día", "D"), WEEK("Semana", "S"), MONTH("Mes", "M"), SETTINGS("Ajustes", "A"), ADVANCED("Avanzado", "+")
+private enum class Destination(val label: String, val icon: Int) {
+    DAY("Día", R.drawable.ic_nav_day),
+    WEEK("Semana", R.drawable.ic_nav_week),
+    MONTH("Mes", R.drawable.ic_nav_month),
+    SETTINGS("Ajustes", R.drawable.ic_nav_settings),
+    ADVANCED("Avanzado", R.drawable.ic_nav_advanced),
 }
 
 @Composable
@@ -137,6 +144,7 @@ private fun LoadingScreen() {
 private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable { mutableStateOf("faith") }
     var extra by rememberSaveable { mutableStateOf(true) }
+    var bibleVersion by rememberSaveable { mutableStateOf(state.bibleVersion) }
     Scaffold { insets ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(insets),
@@ -155,6 +163,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
             }
             item { ThemeSelector(theme, onSelect = { theme = it }) }
             item { DeuterocanonSwitch(extra, onChange = { extra = it }) }
+            item { BibleVersionDropdown(bibleVersion, onSelect = { bibleVersion = it }) }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -167,7 +176,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 Button(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     enabled = !state.generating,
-                    onClick = { viewModel.generate(theme, extra, false) },
+                    onClick = { viewModel.generate(theme, extra, false, bibleVersion) },
                 ) {
                     if (state.generating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else Text("Crear mi plan de ${LocalDate.now().year}")
@@ -217,14 +226,11 @@ private fun Planner(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMode
 
 @Composable
 private fun DestinationGlyph(destination: Destination) {
-    Surface(
-        modifier = Modifier.size(25.dp), shape = CircleShape,
-        color = Color.Transparent,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(destination.glyph, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        }
-    }
+    Icon(
+        painter = painterResource(destination.icon),
+        contentDescription = destination.label,
+        modifier = Modifier.size(24.dp),
+    )
 }
 
 @Composable
@@ -279,7 +285,7 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
             ProgressSummary(done, day.readings.size)
         }
         items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
-            ReadingCard(day, index, "$date#$index" in state.completed) { viewModel.toggleReading(date, index) }
+            ReadingCard(day, index, "$date#$index" in state.completed, state.bibleVersion) { viewModel.toggleReading(date, index) }
         }
         item {
             Text(day.connection, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))
@@ -314,7 +320,7 @@ private fun ProgressSummary(done: Int, total: Int) {
 }
 
 @Composable
-private fun ReadingCard(day: DayPlan, index: Int, complete: Boolean, onToggle: () -> Unit) {
+private fun ReadingCard(day: DayPlan, index: Int, complete: Boolean, defaultVersion: String, onToggle: () -> Unit) {
     val reading = day.readings[index]
     val context = androidx.compose.ui.platform.LocalContext.current
     var showVersions by remember { mutableStateOf(false) }
@@ -331,7 +337,7 @@ private fun ReadingCard(day: DayPlan, index: Int, complete: Boolean, onToggle: (
                 Checkbox(checked = complete, onCheckedChange = { onToggle() }, modifier = Modifier.semantics { contentDescription = "Marcar ${reading.label} como leída" })
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { openBible(context, reading, if (reading.isDeuterocanonical) "TLAI" else "RVC") }) {
+                TextButton(onClick = { openBible(context, reading, defaultVersion) }) {
                     Text("Leer ahora…"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(17.dp))
                 }
                 Spacer(Modifier.weight(1f))
@@ -355,18 +361,16 @@ private fun readingCaption(reading: Reading): String = when {
 
 @Composable
 private fun VersionDialog(reading: Reading, onDismiss: () -> Unit, onChoose: (String) -> Unit) {
-    val versions = if (reading.isDeuterocanonical) listOf("TLAI" to "Traducción al Lenguaje Actual Interconfesional") else listOf(
-        "RVC" to "Reina Valera Contemporánea", "NTV" to "Nueva Traducción Viviente", "TLAI" to "Traducción al Lenguaje Actual Interconfesional",
-    )
+    val versions = bibleTranslations.filter { !reading.isDeuterocanonical || it.id == "TLAI" }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("¿En qué versión deseas leer esta lectura?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(reading.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                versions.forEach { (id, name) ->
-                    OutlinedButton(onClick = { onChoose(id) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("$id  ·  $name", modifier = Modifier.fillMaxWidth())
+                versions.forEach { version ->
+                    OutlinedButton(onClick = { onChoose(version.id) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("${version.id}  ·  ${version.name}", modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -425,7 +429,7 @@ private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewM
         }
         item { Text(selected.format(longDate).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.titleLarge) }
         items(day.readings.indices.toList()) { index ->
-            ReadingCard(day, index, "$selected#$index" in state.completed) { viewModel.toggleReading(selected, index) }
+            ReadingCard(day, index, "$selected#$index" in state.completed, state.bibleVersion) { viewModel.toggleReading(selected, index) }
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
@@ -600,6 +604,7 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
         }
         item { ThemeDropdown(theme) { theme = it } }
         item { DeuterocanonSwitch(extra) { extra = it } }
+        item { BibleVersionDropdown(state.bibleVersion, viewModel::setBibleVersion) }
         item {
             Button(
                 onClick = { confirm = true }, enabled = !state.generating,
@@ -608,14 +613,6 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
         }
         item { HorizontalDivider() }
         item { Statistics(stats) }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Text(
-                    "Nota de método: para cumplir el capítulo evangélico diario, cada semestre recorre los Evangelios de forma continua y vuelve al inicio cuando es necesario. El primer semestre usa un orden temático aleatorio; el segundo, una armonización cronológica por etapas.",
-                    modifier = Modifier.padding(18.dp), style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
         item { Spacer(Modifier.height(18.dp)) }
     }
     if (confirm) {
@@ -624,7 +621,7 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
             title = { Text("¿Sustituir el plan actual?") },
             text = { Text("Se creará un recorrido diferente y todo el progreso marcado volverá a 0 %. Esta acción no puede deshacerse.") },
             confirmButton = {
-                Button(onClick = { confirm = false; viewModel.generate(theme, extra, true) }) { Text("Sí, generar") }
+                Button(onClick = { confirm = false; viewModel.generate(theme, extra, true, state.bibleVersion) }) { Text("Sí, generar") }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancelar") } },
         )
@@ -691,6 +688,34 @@ private fun DeuterocanonSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 @Composable
+private fun BibleVersionDropdown(selected: String, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = bibleTranslations.firstOrNull { it.id == selected } ?: bibleTranslations.first()
+    Column {
+        Text("Versión predeterminada para leer", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Los libros deuterocanónicos siempre se abrirán en TLAI.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("${current.id}  ·  ${current.name}", modifier = Modifier.fillMaxWidth())
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                bibleTranslations.forEach { version ->
+                    DropdownMenuItem(
+                        text = { Text("${version.id}  ·  ${version.name}") },
+                        onClick = { onSelect(version.id); expanded = false },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun Statistics(stats: ProgressStats) {
     Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
         Text("Tu avance", style = MaterialTheme.typography.headlineMedium)
@@ -709,18 +734,27 @@ private fun Statistics(stats: ProgressStats) {
             StatCard("Parciales", stats.partialDays, Modifier.weight(1f), Color(0xFFD5D8D5))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard("Días leídos", stats.readDays, Modifier.weight(1f), MaterialTheme.colorScheme.primaryContainer)
+            StatCard(
+                "Días leídos", stats.readDays, Modifier.weight(1f),
+                MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer,
+            )
             StatCard("No leídos", stats.unreadDays, Modifier.weight(1f), Color(0xFFFFDAD6))
         }
     }
 }
 
 @Composable
-private fun StatCard(label: String, value: Int, modifier: Modifier, color: Color) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = color)) {
+private fun StatCard(
+    label: String,
+    value: Int,
+    modifier: Modifier,
+    color: Color,
+    contentColor: Color = Color(0xFF172019),
+) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = color, contentColor = contentColor)) {
         Column(Modifier.padding(16.dp)) {
-            Text("$value", style = MaterialTheme.typography.headlineMedium, color = Color(0xFF172019))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = Color(0xFF354139))
+            Text("$value", style = MaterialTheme.typography.headlineMedium, color = contentColor)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = contentColor.copy(alpha = .82f))
         }
     }
 }

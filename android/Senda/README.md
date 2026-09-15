@@ -2,6 +2,14 @@
 
 Aplicación Android nativa y offline para crear y seguir un plan anual de lectura bíblica.
 
+## Versión 1.1.0
+
+- Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
+- Las lecturas deuterocanónicas se mantienen siempre en TLAI.
+- Contraste adaptativo en la tarjeta «Días leídos» del modo oscuro.
+- Paleta Fucsia en sustitución de Turquesa.
+- Navegación con iconos vectoriales propios y optimizados.
+
 ## Compilar
 
 Requisitos: JDK 17 y Android SDK 37.

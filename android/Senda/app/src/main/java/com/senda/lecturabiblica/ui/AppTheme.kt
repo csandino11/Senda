@@ -15,7 +15,7 @@ val accentPalettes = listOf(
     AccentPalette("coral", "Coral", Color(0xFFA83E4C), Color(0xFFFFB2BA)),
     AccentPalette("violeta", "Violeta", Color(0xFF7153A7), Color(0xFFD4BBFF)),
     AccentPalette("mango", "Mango", Color(0xFF8A5900), Color(0xFFFFBA47)),
-    AccentPalette("turquesa", "Turquesa", Color(0xFF006A6A), Color(0xFF80D5D4)),
+    AccentPalette("fucsia", "Fucsia", Color(0xFFA10069), Color(0xFFFFAFD7)),
 )
 
 @Composable

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.senda.lecturabiblica.data.PlanStore
 import com.senda.lecturabiblica.domain.PlanGenerator
+import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.model.DayStatus
 import com.senda.lecturabiblica.model.ProgressStats
 import com.senda.lecturabiblica.model.ReadingPlan
@@ -25,6 +26,7 @@ data class AppUiState(
     val error: String? = null,
     val themeMode: String = "system",
     val accent: String = "bosque",
+    val bibleVersion: String = "RVC",
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,11 +42,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableState.value = AppUiState(
                 plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(year),
                 loading = false, themeMode = store.themeMode(), accent = store.accent(),
+                bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
             )
         }
     }
 
-    fun generate(theme: String, includeDeuterocanon: Boolean, replace: Boolean) {
+    fun generate(theme: String, includeDeuterocanon: Boolean, replace: Boolean, bibleVersion: String) {
         if (mutableState.value.generating) return
         mutableState.update { it.copy(generating = true, error = null) }
         viewModelScope.launch {
@@ -53,8 +56,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess { plan ->
                 withContext(Dispatchers.IO) {
                     if (replace) store.replacePlan(plan) else store.savePlan(plan)
+                    store.saveBibleVersion(bibleVersion)
                 }
-                mutableState.update { it.copy(plan = plan, completed = emptySet(), generating = false) }
+                mutableState.update { it.copy(plan = plan, completed = emptySet(), generating = false, bibleVersion = bibleVersion) }
             }.onFailure { cause ->
                 mutableState.update { it.copy(generating = false, error = cause.message ?: "No se pudo generar el plan.") }
             }
@@ -93,6 +97,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setAppearance(mode: String = mutableState.value.themeMode, accent: String = mutableState.value.accent) {
         store.saveAppearance(mode, accent)
         mutableState.update { it.copy(themeMode = mode, accent = accent) }
+    }
+
+    fun setBibleVersion(version: String) {
+        if (bibleTranslations.none { it.id == version }) return
+        store.saveBibleVersion(version)
+        mutableState.update { it.copy(bibleVersion = version) }
     }
 
     fun clearError() = mutableState.update { it.copy(error = null) }

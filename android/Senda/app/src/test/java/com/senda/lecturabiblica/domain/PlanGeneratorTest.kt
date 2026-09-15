@@ -54,13 +54,17 @@ class PlanGeneratorTest {
         assertEquals("https://www.bible.com/es/bible/146/GEN.1.RVC", youVersionUrl(genesis, "RVC"))
         assertEquals("https://www.bible.com/es/bible/127/GEN.1.NTV", youVersionUrl(genesis, "NTV"))
         assertEquals("https://www.bible.com/es/bible/178/GEN.1.TLAI", youVersionUrl(genesis, "TLAI"))
+        assertEquals("https://www.bible.com/es/bible/197/GEN.1.PDT", youVersionUrl(genesis, "PDT"))
+        assertEquals("https://www.bible.com/es/bible/753/GEN.1.NBV", youVersionUrl(genesis, "NBV"))
     }
 
     @Test
     fun deuterocanonicalLinksAlwaysUseTlai() {
-        assertEquals(
-            "https://www.bible.com/es/bible/178/TOB.1.TLAI",
-            youVersionUrl(Reading("TOB", 1), "RVC"),
-        )
+        bibleTranslations.forEach { requested ->
+            assertEquals(
+                "https://www.bible.com/es/bible/178/TOB.1.TLAI",
+                youVersionUrl(Reading("TOB", 1), requested.id),
+            )
+        }
     }
 }

@@ -2,15 +2,21 @@ package com.senda.lecturabiblica.domain
 
 import com.senda.lecturabiblica.model.Reading
 
-private val youVersionIds = mapOf(
-    "RVC" to 146,
-    "NTV" to 127,
-    "TLAI" to 178,
+data class BibleTranslation(val id: String, val name: String, val youVersionId: Int)
+
+val bibleTranslations = listOf(
+    BibleTranslation("RVC", "Reina Valera Contemporánea", 146),
+    BibleTranslation("NTV", "Nueva Traducción Viviente", 127),
+    BibleTranslation("TLAI", "Traducción al Lenguaje Actual Interconfesional", 178),
+    BibleTranslation("PDT", "Palabra de Dios para Todos", 197),
+    BibleTranslation("NBV", "Nueva Biblia Viva", 753),
 )
 
 /** Builds a YouVersion chapter URL and enforces TLAI for deuterocanonical readings. */
 fun youVersionUrl(reading: Reading, requestedVersion: String): String {
     val version = if (reading.isDeuterocanonical) "TLAI" else requestedVersion
-    val versionId = requireNotNull(youVersionIds[version]) { "Versión bíblica no admitida: $version" }
-    return "https://www.bible.com/es/bible/$versionId/${reading.book}.${reading.chapter}.$version"
+    val translation = requireNotNull(bibleTranslations.firstOrNull { it.id == version }) {
+        "Versión bíblica no admitida: $version"
+    }
+    return "https://www.bible.com/es/bible/${translation.youVersionId}/${reading.book}.${reading.chapter}.$version"
 }
