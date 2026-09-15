@@ -1,6 +1,16 @@
 # Senda para Android
 
-Aplicación Android nativa y offline para crear y seguir un plan anual de lectura bíblica.
+Aplicación Android nativa para crear y seguir un plan anual de lectura bíblica. El plan
+y su progreso funcionan localmente; la red solo se usa para comprobar actualizaciones.
+
+## Versión 1.2.0
+
+- Color de énfasis aplicado correctamente a la navegación y los controles de Ajustes.
+- Respaldo comprimido `.senda` del plan, el progreso y la traducción preferida.
+- Restauración desde el primer inicio, desde Avanzado o al abrir un archivo compatible.
+- Guardado directo en Descargas y opción inmediata para compartir el respaldo.
+- Comprobación diaria y ligera de la versión más reciente publicada en GitHub Releases.
+- Descarga directa del APK actualizado mediante el gestor de descargas de Android.
 
 ## Versión 1.1.0
 

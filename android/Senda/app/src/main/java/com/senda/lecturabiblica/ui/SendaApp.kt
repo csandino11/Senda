@@ -2,10 +2,17 @@
 
 package com.senda.lecturabiblica.ui
 
+import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -88,6 +95,8 @@ import com.senda.lecturabiblica.AppUiState
 import com.senda.lecturabiblica.AppViewModel
 import com.senda.lecturabiblica.R
 import com.senda.lecturabiblica.data.BibleData
+import com.senda.lecturabiblica.data.SENDA_BACKUP_MIME
+import com.senda.lecturabiblica.data.SavedPlanBackup
 import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.domain.youVersionUrl
 import com.senda.lecturabiblica.model.DayPlan
@@ -116,18 +125,99 @@ private enum class Destination(val label: String, val icon: Int) {
 
 @Composable
 fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val updatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.downloadUpdate()
+        else viewModel.showError("Se necesita permiso para guardar la actualización en Descargas.")
+    }
+    val downloadUpdate = {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            updatePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            viewModel.downloadUpdate()
+        }
+    }
     when {
         state.loading -> LoadingScreen()
         state.plan == null -> OnboardingScreen(state, viewModel)
         else -> Planner(state.plan, state, viewModel)
     }
-    state.error?.let { error ->
-        AlertDialog(
-            onDismissRequest = viewModel::clearError,
-            confirmButton = { TextButton(onClick = viewModel::clearError) { Text("Entendido") } },
-            title = { Text("No se pudo completar") }, text = { Text(error) },
+    when {
+        state.error != null -> ErrorDialog(state.error, viewModel::clearError)
+        state.savedBackup != null -> SavedBackupDialog(state.savedBackup, viewModel::dismissSavedBackup) {
+            runCatching { shareBackup(context, state.savedBackup) }
+                .onFailure { viewModel.showError("No se encontró una aplicación compatible para compartir el respaldo.") }
+        }
+        state.pendingRestore != null -> RestoreBackupDialog(state.restoringBackup, viewModel::cancelRestore, viewModel::restorePendingBackup)
+        state.notice != null -> NoticeDialog(state.notice, viewModel::dismissNotice)
+        state.availableUpdate != null -> UpdateDialog(
+            version = state.availableUpdate.version,
+            onDownload = downloadUpdate,
+            onIgnore = viewModel::ignoreUpdate,
+            onLater = viewModel::postponeUpdate,
         )
     }
+}
+
+@Composable
+private fun ErrorDialog(message: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Entendido") } },
+        title = { Text("No se pudo completar") }, text = { Text(message) },
+    )
+}
+
+@Composable
+private fun SavedBackupDialog(backup: SavedPlanBackup, onClose: () -> Unit, onShare: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Plan guardado") },
+        text = { Text("${backup.fileName}\n\nEl plan y su progreso se guardaron correctamente en Descargas.") },
+        confirmButton = { Button(onClick = onShare) { Text("Compartir") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cerrar") } },
+    )
+}
+
+@Composable
+private fun RestoreBackupDialog(restoring: Boolean, onCancel: () -> Unit, onRestore: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = { if (!restoring) onCancel() },
+        title = { Text("¿Restaurar este plan?") },
+        text = { Text("El plan y el progreso guardados sustituirán los datos actuales de este año.") },
+        confirmButton = {
+            Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restaurando…" else "Restaurar") }
+        },
+        dismissButton = { TextButton(onClick = onCancel, enabled = !restoring) { Text("Cancelar") } },
+    )
+}
+
+@Composable
+private fun NoticeDialog(message: String, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Senda") },
+        text = { Text(message) },
+        confirmButton = { Button(onClick = onClose) { Text("Cerrar") } },
+    )
+}
+
+@Composable
+private fun UpdateDialog(version: String, onDownload: () -> Unit, onIgnore: () -> Unit, onLater: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onLater,
+        title = { Text("Nueva versión disponible") },
+        text = { Text("Hay una nueva actualización. ¿Desea descargar la versión más reciente de esta app?\n\nVersión $version") },
+        confirmButton = { Button(onClick = onDownload) { Text("Descargar") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onIgnore) { Text("Ignorar") }
+                TextButton(onClick = onLater) { Text("Después") }
+            }
+        },
+    )
 }
 
 @Composable
@@ -145,6 +235,9 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable { mutableStateOf("faith") }
     var extra by rememberSaveable { mutableStateOf(true) }
     var bibleVersion by rememberSaveable { mutableStateOf(state.bibleVersion) }
+    val restorePlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::requestRestore)
+    }
     Scaffold { insets ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(insets),
@@ -181,6 +274,12 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                     if (state.generating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else Text("Crear mi plan de ${LocalDate.now().year}")
                 }
+            }
+            item {
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    onClick = { restorePlan.launch(arrayOf(SENDA_BACKUP_MIME, "application/octet-stream")) },
+                ) { Text("Restaurar un plan guardado") }
             }
         }
     }
@@ -593,6 +692,23 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
     var theme by rememberSaveable(plan.id) { mutableStateOf(plan.theme) }
     var extra by rememberSaveable(plan.id) { mutableStateOf(plan.includeDeuterocanon) }
     var confirm by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val savePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.savePlanBackup()
+        else viewModel.showError("Se necesita permiso para guardar el plan en Descargas.")
+    }
+    val restorePlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::requestRestore)
+    }
+    val savePlan = {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            savePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            viewModel.savePlanBackup()
+        }
+    }
     val stats = viewModel.stats()
     LazyColumn(
         modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
@@ -610,6 +726,19 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
                 onClick = { confirm = true }, enabled = !state.generating,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
             ) { Text(if (state.generating) "Generando…" else "Generar un nuevo plan") }
+        }
+        item {
+            OutlinedButton(
+                onClick = savePlan,
+                enabled = !state.savingBackup,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+            ) { Text(if (state.savingBackup) "Guardando…" else "Guardar Plan") }
+        }
+        item {
+            TextButton(
+                onClick = { restorePlan.launch(arrayOf(SENDA_BACKUP_MIME, "application/octet-stream")) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Restaurar un plan guardado") }
         }
         item { HorizontalDivider() }
         item { Statistics(stats) }
@@ -766,4 +895,14 @@ private fun openBible(context: Context, reading: Reading, version: String) {
     } catch (_: ActivityNotFoundException) {
         context.startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
+}
+
+private fun shareBackup(context: Context, backup: SavedPlanBackup) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/octet-stream"
+        putExtra(Intent.EXTRA_STREAM, backup.uri)
+        clipData = ClipData.newUri(context.contentResolver, backup.fileName, backup.uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent, "Compartir plan de Senda"))
 }

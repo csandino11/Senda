@@ -1,12 +1,17 @@
 package com.senda.lecturabiblica.domain
 
 import com.senda.lecturabiblica.data.BibleData
+import com.senda.lecturabiblica.data.PlanBackupCodec
+import com.senda.lecturabiblica.data.PlanBackupData
+import com.senda.lecturabiblica.data.isNewerVersion
 import com.senda.lecturabiblica.model.Reading
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import java.io.ByteArrayInputStream
 import java.time.DayOfWeek
 
 class PlanGeneratorTest {
@@ -65,6 +70,37 @@ class PlanGeneratorTest {
                 "https://www.bible.com/es/bible/178/TOB.1.TLAI",
                 youVersionUrl(Reading("TOB", 1), requested.id),
             )
+        }
+    }
+
+    @Test
+    fun backupRoundTripPreservesPlanProgressAndVersionInACompactFile() {
+        val plan = PlanGenerator.generate(2026, "hope", true, 120L)
+        val completed = setOf("2026-01-01#0", "2026-01-01#1", "2026-03-14#2")
+        val encoded = PlanBackupCodec.encode(PlanBackupData(plan, completed, "NBV"))
+        val restored = PlanBackupCodec.decode(ByteArrayInputStream(encoded))
+
+        assertEquals(plan, restored.plan)
+        assertEquals(completed, restored.completed)
+        assertEquals("NBV", restored.bibleVersion)
+        assertTrue("El respaldo debería pesar menos de 100 KiB", encoded.size < 100 * 1024)
+    }
+
+    @Test
+    fun semanticVersionComparisonOnlyAcceptsNewerReleases() {
+        assertTrue(isNewerVersion("1.1.0", "1.2.0"))
+        assertTrue(isNewerVersion("1.9.9", "2.0.0"))
+        assertFalse(isNewerVersion("1.2.0", "1.2.0"))
+        assertFalse(isNewerVersion("1.2.0", "1.1.9"))
+    }
+
+    @Test
+    fun invalidBackupIsRejectedBeforeItCanReplaceLocalProgress() {
+        try {
+            PlanBackupCodec.decode(ByteArrayInputStream("no es un respaldo de Senda".toByteArray()))
+            fail("Un archivo sin la firma de Senda debe rechazarse")
+        } catch (_: IllegalArgumentException) {
+            // Resultado esperado.
         }
     }
 }

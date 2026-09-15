@@ -1,9 +1,16 @@
 package com.senda.lecturabiblica
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.senda.lecturabiblica.data.AppUpdate
+import com.senda.lecturabiblica.data.PlanBackupCodec
+import com.senda.lecturabiblica.data.PlanBackupData
+import com.senda.lecturabiblica.data.PlanBackupFiles
 import com.senda.lecturabiblica.data.PlanStore
+import com.senda.lecturabiblica.data.SavedPlanBackup
+import com.senda.lecturabiblica.data.UpdateRepository
 import com.senda.lecturabiblica.domain.PlanGenerator
 import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.model.DayStatus
@@ -27,10 +34,17 @@ data class AppUiState(
     val themeMode: String = "system",
     val accent: String = "bosque",
     val bibleVersion: String = "RVC",
+    val savingBackup: Boolean = false,
+    val savedBackup: SavedPlanBackup? = null,
+    val pendingRestore: Uri? = null,
+    val restoringBackup: Boolean = false,
+    val notice: String? = null,
+    val availableUpdate: AppUpdate? = null,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store = PlanStore(application)
+    private val updates = UpdateRepository(application)
     private val year = LocalDate.now().year
     private val mutableState = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
@@ -39,11 +53,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val plan = store.loadPlan(year)
             val validPlan = plan?.takeIf { runCatching { PlanGenerator.validate(it) }.isSuccess }
-            mutableState.value = AppUiState(
-                plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(year),
-                loading = false, themeMode = store.themeMode(), accent = store.accent(),
-                bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
-            )
+            mutableState.update { current ->
+                AppUiState(
+                    plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(year),
+                    loading = false, themeMode = store.themeMode(), accent = store.accent(),
+                    bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
+                    pendingRestore = current.pendingRestore,
+                )
+            }
+            checkForUpdates()
         }
     }
 
@@ -105,7 +123,122 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(bibleVersion = version) }
     }
 
+    fun savePlanBackup() {
+        val snapshot = mutableState.value
+        val plan = snapshot.plan ?: return
+        if (snapshot.savingBackup) return
+        mutableState.update { it.copy(savingBackup = true, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val bytes = PlanBackupCodec.encode(PlanBackupData(plan, snapshot.completed, snapshot.bibleVersion))
+                PlanBackupFiles.saveToDownloads(getApplication(), bytes, plan.year)
+            }.onSuccess { saved ->
+                mutableState.update { it.copy(savingBackup = false, savedBackup = saved) }
+            }.onFailure { cause ->
+                mutableState.update {
+                    it.copy(savingBackup = false, error = cause.message ?: "No se pudo guardar el plan en Descargas.")
+                }
+            }
+        }
+    }
+
+    fun dismissSavedBackup() = mutableState.update { it.copy(savedBackup = null) }
+
+    fun requestRestore(uri: Uri) {
+        mutableState.update { it.copy(pendingRestore = uri, error = null) }
+    }
+
+    fun cancelRestore() = mutableState.update { it.copy(pendingRestore = null) }
+
+    fun restorePendingBackup() {
+        val uri = mutableState.value.pendingRestore ?: return
+        if (mutableState.value.restoringBackup) return
+        mutableState.update { it.copy(restoringBackup = true, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val input = checkNotNull(getApplication<Application>().contentResolver.openInputStream(uri)) {
+                    "No se pudo abrir el archivo seleccionado."
+                }
+                val backup = input.use(PlanBackupCodec::decode)
+                require(backup.plan.year == year) {
+                    "El respaldo corresponde al año ${backup.plan.year}; esta instalación utiliza el plan de $year."
+                }
+                PlanGenerator.validate(backup.plan)
+                require(bibleTranslations.any { it.id == backup.bibleVersion }) {
+                    "El respaldo contiene una traducción bíblica no compatible."
+                }
+                val validKeys = backup.plan.days.flatMap { day ->
+                    day.readings.indices.map { index -> completionKey(day.date, index) }
+                }.toSet()
+                require(backup.completed.all(validKeys::contains)) { "El progreso del respaldo está dañado." }
+                store.restore(backup)
+                backup
+            }.onSuccess { backup ->
+                mutableState.update {
+                    it.copy(
+                        plan = backup.plan,
+                        completed = backup.completed,
+                        bibleVersion = backup.bibleVersion,
+                        pendingRestore = null,
+                        restoringBackup = false,
+                        notice = "Plan y progreso restaurados correctamente.",
+                    )
+                }
+            }.onFailure { cause ->
+                mutableState.update {
+                    it.copy(
+                        pendingRestore = null,
+                        restoringBackup = false,
+                        error = cause.message ?: "No se pudo restaurar el respaldo.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissNotice() = mutableState.update { it.copy(notice = null) }
+
+    fun ignoreUpdate() {
+        store.snoozeUpdates(LocalDate.now().plusDays(1).toEpochDay())
+        mutableState.update { it.copy(availableUpdate = null) }
+    }
+
+    fun postponeUpdate() {
+        store.snoozeUpdates(LocalDate.now().plusDays(5).toEpochDay())
+        mutableState.update { it.copy(availableUpdate = null) }
+    }
+
+    fun downloadUpdate() {
+        val update = mutableState.value.availableUpdate ?: return
+        runCatching { updates.enqueueDownload(update) }
+            .onSuccess {
+                store.snoozeUpdates(LocalDate.now().plusDays(1).toEpochDay())
+                mutableState.update {
+                    it.copy(
+                        availableUpdate = null,
+                        notice = "La actualización se está descargando en la carpeta Descargas.",
+                    )
+                }
+            }
+            .onFailure { cause ->
+                mutableState.update {
+                    it.copy(error = cause.message ?: "No se pudo iniciar la descarga de la actualización.")
+                }
+            }
+    }
+
+    fun showError(message: String) = mutableState.update { it.copy(error = message) }
+
     fun clearError() = mutableState.update { it.copy(error = null) }
+
+    private fun checkForUpdates() {
+        val day = LocalDate.now().toEpochDay()
+        if (!store.shouldCheckForUpdate(day)) return
+        store.markUpdateChecked(day)
+        runCatching(updates::findUpdate).getOrNull()?.let { update ->
+            mutableState.update { it.copy(availableUpdate = update) }
+        }
+    }
 
     private fun completionKey(date: LocalDate, index: Int) = "$date#$index"
 }

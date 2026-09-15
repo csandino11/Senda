@@ -1,6 +1,7 @@
 package com.senda.lecturabiblica
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,5 +23,12 @@ class MainActivity : ComponentActivity() {
                 SendaApp(state, viewModel)
             }
         }
+        intent?.data?.let(viewModel::requestRestore)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let(viewModel::requestRestore)
     }
 }

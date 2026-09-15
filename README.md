@@ -21,7 +21,9 @@ todo el progreso localmente en el dispositivo.
 - Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
 - Apertura prioritaria en YouVersion y alternativa a otra aplicación compatible.
 - TLAI obligatoria para las lecturas deuterocanónicas.
-- Plan y progreso almacenados únicamente en el dispositivo.
+- Respaldo comprimido del plan y el progreso en archivos `.senda`, restaurable en
+  otra instalación o dispositivo.
+- Comprobación silenciosa de nuevas versiones publicadas en GitHub una vez al día.
 
 ## Instalación
 
@@ -52,8 +54,11 @@ el capítulo correspondiente mediante enlaces de YouVersion.
 - Android Gradle Plugin 9.4.
 - `compileSdk` y `targetSdk` 37.
 - Persistencia local mediante `SharedPreferences`.
+- Respaldos portátiles mediante JSON comprimido con GZIP y firma de formato propia.
+- Consulta ligera de GitHub Releases mediante las APIs nativas de Android.
 - R8 y reducción de recursos habilitados para producir un APK ligero.
-- Sin permiso de Internet: la lectura se delega mediante enlaces externos.
+- El permiso de Internet se utiliza únicamente para la comprobación de actualizaciones;
+  el plan y el progreso siguen almacenándose localmente.
 
 ## Estructura del repositorio
 
@@ -106,6 +111,8 @@ la firma del APK.
 
 ## Versiones
 
+- **1.2.0:** color de énfasis corregido en toda la interfaz, respaldo/restauración
+  portátil del plan y el progreso, y comprobación diaria opcional de actualizaciones.
 - **1.1.0:** traducción predeterminada, PDT y NBV, contraste oscuro corregido, paleta
   Fucsia e iconos vectoriales nuevos.
 - **1.0.0:** primera versión Android con generador anual, calendario, seguimiento,

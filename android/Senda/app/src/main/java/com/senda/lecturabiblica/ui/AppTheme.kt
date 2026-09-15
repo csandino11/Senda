@@ -22,16 +22,21 @@ val accentPalettes = listOf(
 fun SendaTheme(mode: String, accentId: String, content: @Composable () -> Unit) {
     val dark = when (mode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     val accent = accentPalettes.firstOrNull { it.id == accentId } ?: accentPalettes.first()
+    val darkAccentContainer = accent.color.copy(alpha = .52f).compositeOver(Color(0xFF27312B))
+    val lightAccentContainer = accent.color.copy(alpha = .16f).compositeOver(Color(0xFFF7FAF7))
     val scheme = if (dark) {
         darkColorScheme(
             primary = accent.darkColor,
             onPrimary = Color(0xFF00382A),
-            primaryContainer = accent.color.copy(alpha = .62f),
+            primaryContainer = darkAccentContainer,
             onPrimaryContainer = Color(0xFFE1F5EA),
-            secondary = Color(0xFFB7CCBF),
+            secondary = accent.darkColor,
+            secondaryContainer = darkAccentContainer,
+            onSecondaryContainer = Color(0xFFE1F5EA),
             tertiary = Color(0xFFE4C78A),
             background = Color(0xFF101512),
             surface = Color(0xFF151B17),
+            surfaceTint = accent.darkColor,
             surfaceVariant = Color(0xFF27312B),
             onSurface = Color(0xFFE4EAE5),
             onSurfaceVariant = Color(0xFFC0C9C2),
@@ -43,12 +48,15 @@ fun SendaTheme(mode: String, accentId: String, content: @Composable () -> Unit) 
         lightColorScheme(
             primary = accent.color,
             onPrimary = Color.White,
-            primaryContainer = accent.color.copy(alpha = .14f).compositeOver(Color(0xFFF7FAF7)),
+            primaryContainer = lightAccentContainer,
             onPrimaryContainer = Color(0xFF10281F),
-            secondary = Color(0xFF496458),
+            secondary = accent.color,
+            secondaryContainer = lightAccentContainer,
+            onSecondaryContainer = Color(0xFF10281F),
             tertiary = Color(0xFF705D28),
             background = Color(0xFFF8FAF7),
             surface = Color(0xFFFEFFFC),
+            surfaceTint = accent.color,
             surfaceVariant = Color(0xFFE7EEE8),
             onSurface = Color(0xFF172019),
             onSurfaceVariant = Color(0xFF46514A),

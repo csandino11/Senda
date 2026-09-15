@@ -13,11 +13,11 @@ class PlanStore(context: Context) {
     private val preferences = context.getSharedPreferences("senda_local", Context.MODE_PRIVATE)
 
     fun loadPlan(year: Int): ReadingPlan? = preferences.getString("plan_$year", null)?.let { encoded ->
-        runCatching { decodePlan(JSONObject(encoded)) }.getOrNull()
+        runCatching { PlanJson.decode(JSONObject(encoded)) }.getOrNull()
     }
 
     fun savePlan(plan: ReadingPlan) {
-        preferences.edit { putString("plan_${plan.year}", encodePlan(plan).toString()) }
+        preferences.edit { putString("plan_${plan.year}", PlanJson.encode(plan).toString()) }
     }
 
     fun completed(year: Int): Set<String> = preferences.getStringSet("completed_$year", emptySet())?.toSet().orEmpty()
@@ -28,8 +28,16 @@ class PlanStore(context: Context) {
 
     fun replacePlan(plan: ReadingPlan) {
         preferences.edit {
-            putString("plan_${plan.year}", encodePlan(plan).toString())
+            putString("plan_${plan.year}", PlanJson.encode(plan).toString())
             putStringSet("completed_${plan.year}", emptySet())
+        }
+    }
+
+    fun restore(backup: PlanBackupData) {
+        preferences.edit {
+            putString("plan_${backup.plan.year}", PlanJson.encode(backup.plan).toString())
+            putStringSet("completed_${backup.plan.year}", backup.completed)
+            putString("bible_version", backup.bibleVersion)
         }
     }
 
@@ -47,7 +55,23 @@ class PlanStore(context: Context) {
         preferences.edit { putString("bible_version", version) }
     }
 
-    private fun encodePlan(plan: ReadingPlan) = JSONObject().apply {
+    fun shouldCheckForUpdate(day: Long): Boolean {
+        val lastCheck = preferences.getLong("last_update_check_day", Long.MIN_VALUE)
+        val snoozeUntil = preferences.getLong("update_snooze_until_day", Long.MIN_VALUE)
+        return lastCheck != day && day >= snoozeUntil
+    }
+
+    fun markUpdateChecked(day: Long) {
+        preferences.edit { putLong("last_update_check_day", day) }
+    }
+
+    fun snoozeUpdates(untilDay: Long) {
+        preferences.edit { putLong("update_snooze_until_day", untilDay) }
+    }
+}
+
+internal object PlanJson {
+    fun encode(plan: ReadingPlan) = JSONObject().apply {
         put("version", plan.version); put("id", plan.id); put("year", plan.year); put("theme", plan.theme)
         put("includeDeuterocanon", plan.includeDeuterocanon); put("seed", plan.seed); put("createdAt", plan.createdAt)
         put("days", JSONArray().apply {
@@ -63,7 +87,7 @@ class PlanStore(context: Context) {
         })
     }
 
-    private fun decodePlan(json: JSONObject): ReadingPlan = ReadingPlan(
+    fun decode(json: JSONObject): ReadingPlan = ReadingPlan(
         version = json.getInt("version"), id = json.getString("id"), year = json.getInt("year"),
         theme = json.getString("theme"), includeDeuterocanon = json.getBoolean("includeDeuterocanon"),
         seed = json.getLong("seed"), createdAt = json.getString("createdAt"),
