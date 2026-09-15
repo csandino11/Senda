@@ -150,7 +150,11 @@ fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
             runCatching { shareBackup(context, state.savedBackup) }
                 .onFailure { viewModel.showError("No se encontró una aplicación compatible para compartir el respaldo.") }
         }
-        state.pendingRestore != null -> RestoreBackupDialog(state.restoringBackup, viewModel::cancelRestore, viewModel::restorePendingBackup)
+        state.pendingRestore != null && !state.loading -> RestoreBackupDialog(
+            state.restoringBackup,
+            viewModel::cancelRestore,
+            viewModel::restorePendingBackup,
+        )
         state.notice != null -> NoticeDialog(state.notice, viewModel::dismissNotice)
         state.availableUpdate != null -> UpdateDialog(
             version = state.availableUpdate.version,
