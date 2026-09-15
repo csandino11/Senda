@@ -5,3 +5,5 @@ local.properties
 *.jks
 *.keystore
 hs_err_pid*.log
+keystore.properties
+signing/
