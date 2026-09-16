@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import com.senda.lecturabiblica.model.ReadingPlan
+import com.senda.lecturabiblica.model.endDate
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -88,8 +89,9 @@ object PlanBackupCodec {
 object PlanBackupFiles {
     private val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
-    fun saveToDownloads(context: Context, data: ByteArray, year: Int): SavedPlanBackup {
-        val fileName = "Senda-plan-$year-${LocalDateTime.now().format(timestamp)}$SENDA_BACKUP_EXTENSION"
+    fun saveToDownloads(context: Context, data: ByteArray, plan: ReadingPlan): SavedPlanBackup {
+        val range = "${plan.startDate}-${plan.endDate}"
+        val fileName = "Senda-plan-$range-${LocalDateTime.now().format(timestamp)}$SENDA_BACKUP_EXTENSION"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveWithMediaStore(context, fileName, data)
         } else {

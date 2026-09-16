@@ -1,7 +1,24 @@
 # Senda para Android
 
-Aplicación Android nativa para crear y seguir un plan anual de lectura bíblica. El plan
-y su progreso funcionan localmente; la red solo se usa para comprobar actualizaciones.
+Aplicación Android nativa para crear y seguir un recorrido completo de lectura bíblica
+desde el día de su creación. El plan y su progreso funcionan localmente; la red solo se
+usa para comprobar actualizaciones.
+
+## Versión 1.5.0
+
+- Ritmos Suave, Moderado e Intensivo con límites distintos entre semana y fin de semana.
+- Planes de 300 a 558 días, iniciados en la fecha de creación y capaces de abarcar
+  varios años calendario.
+- Calendario limitado al intervalo real del plan, con días externos deshabilitados.
+- Dos ciclos exactos de Evangelios y Salmos, cuatro de Proverbios y orden cronológico
+  estricto para el segundo ciclo evangélico.
+- Capítulos extensos priorizados para fines de semana; Salmo 119 recibe carga reducida.
+- Marcado automático al pulsar «Leer ahora…» y confirmación antes de volver a habilitar
+  una lectura completada.
+- Pantalla Día reiniciada automáticamente a Hoy al entrar en una fecha nueva.
+- Navegación clara y oscura teñida por la paleta activa, sin el violeta predeterminado
+  de Material.
+- Compatibilidad con planes y respaldos creados en versiones anteriores.
 
 ## Versión 1.2.0
 
@@ -35,6 +52,11 @@ En equipos con memoria limitada, conviene ejecutar las tres tareas por separado 
 
 ## Decisión matemática documentada
 
-Los cuatro Evangelios contienen 89 capítulos. Dos recorridos exactos suman 178, pero un año tiene 365 o 366 días. Para respetar la petición prioritaria de incluir al menos un capítulo evangélico cada día, cada semestre usa su secuencia indicada (temática aleatoria en el primero y cronológica por etapas en el segundo) y vuelve al inicio cuando se agota. La interfaz explica este criterio.
+Después de aplicar las exclusiones y repeticiones, el recorrido contiene exactamente
+1.407 capítulos sin deuterocanónicos y 1.497 al incluirlos. Los ritmos distribuyen esa
+misma cobertura en 520/558, 380/408 o 300/322 días, respectivamente.
 
-Al incluir los deuterocanónicos, la combinación de lectura diaria del Evangelio y cobertura total exige usar cinco lecturas en buena parte de los días laborables y cuatro en algunos fines de semana. Nunca se superan los máximos solicitados.
+La estimación de capítulos extensos usa conteos de versículos de conjuntos KJV
+[canónico](https://github.com/renniemaharaj/kjv-bible) y
+[con deuterocanónicos](https://github.com/aruljohn/Bible-kjv-1611) auditables; no se
+incorpora ni redistribuye texto bíblico en la aplicación.

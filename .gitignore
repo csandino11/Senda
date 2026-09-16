@@ -40,3 +40,6 @@ next-env.d.ts
 *.tsbuildinfo
 wrangler.local.json
 /.pnpm-store/
+/android/Senda/.kotlin/
+**/hs_err_pid*.log
+**/replay_pid*.log

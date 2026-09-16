@@ -24,7 +24,7 @@ data class DayPlan(
 )
 
 data class ReadingPlan(
-    val version: Int = 2,
+    val version: Int = 3,
     val id: String,
     val year: Int,
     val theme: String,
@@ -32,7 +32,35 @@ data class ReadingPlan(
     val seed: Long,
     val createdAt: String,
     val days: List<DayPlan>,
+    val startDate: LocalDate = LocalDate.of(year, 1, 1),
+    val pace: ReadingPace = ReadingPace.LEGACY,
 )
+
+enum class ReadingPace(
+    val id: String,
+    val label: String,
+    val information: String,
+    val weekdayMaximum: Int,
+    val weekendMaximum: Int,
+    private val daysWithoutDeuterocanon: Int,
+    private val daysWithDeuterocanon: Int,
+) {
+    SOFT("soft", "Suave", "Lectura ligera. Al menos 3 lecturas diarias", 3, 2, 520, 558),
+    MODERATE("moderate", "Moderado", "Mayor ritmo. 4 lecturas diarias.", 4, 3, 380, 408),
+    INTENSIVE("intensive", "Intensivo", "Al máximo. Hasta 5 lecturas diarias.", 5, 4, 300, 322),
+    LEGACY("legacy", "Anual", "Plan anual creado con una versión anterior.", 5, 4, 365, 366),
+    ;
+
+    fun durationDays(includeDeuterocanon: Boolean): Int =
+        if (includeDeuterocanon) daysWithDeuterocanon else daysWithoutDeuterocanon
+
+    companion object {
+        val selectable = listOf(SOFT, MODERATE, INTENSIVE)
+        fun fromId(id: String?): ReadingPace = entries.firstOrNull { it.id == id } ?: LEGACY
+    }
+}
+
+val ReadingPlan.endDate: LocalDate get() = days.last().date
 
 enum class DayStatus { NONE, PARTIAL, COMPLETE }
 

@@ -31,4 +31,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         intent.data?.let(viewModel::requestRestore)
     }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.onAppForeground()
+    }
 }

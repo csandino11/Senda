@@ -189,4 +189,16 @@ BEL|Daniel 14 · Bel y el dragón|Dn 14|1|faith wisdom|O|D
     )
 
     fun directlyRelated(a: String, b: String): Boolean = relatedGroups.any { a in it && b in it }
+
+    // Capítulos de 55 versículos o más. El conteo se usa solamente como una
+    // estimación objetiva de extensión para favorecer fines de semana.
+    private val longChapters = setOf(
+        "PSA.119", "LUK.1", "MAT.26", "MRK.14", "PSA.78", "JHN.6", "LUK.22",
+        "DEU.28", "GEN.24", "1KI.8", "LAM.3", "MAT.27", "JER.51", "EZK.16",
+        "LUK.9", "ACT.7", "JHN.8", "LUK.12", "1CO.15", "MAT.13", "1SA.17",
+        "JDG.9", "GEN.41", "JHN.11", "MRK.6", "LUK.8", "LUK.23", "NUM.33",
+        "GEN.31", "LJE.1", "S3Y.1", "SUS.1",
+    )
+
+    fun isLongChapter(book: String, chapter: Int): Boolean = "$book.$chapter" in longChapters
 }

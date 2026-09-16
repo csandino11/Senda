@@ -1,22 +1,26 @@
 # Senda
 
-Senda es una aplicación Android de lectura bíblica anual en español. Genera un plan
-personal para recorrer la Biblia durante el año, conecta lecturas relacionadas y guarda
-todo el progreso localmente en el dispositivo.
+Senda es una aplicación Android de lectura bíblica en español. Genera un recorrido
+personal que comienza el día de su creación, conecta lecturas relacionadas, adapta la
+carga diaria al ritmo elegido y guarda todo el progreso localmente en el dispositivo.
 
 [Descargar la versión más reciente](https://github.com/csandino11/Senda/releases/latest)
 
 ## Características
 
-- Plan completo del 1 de enero al 31 de diciembre, con soporte para años bisiestos.
+- Plan completo desde el día de creación hasta su fecha estimada de finalización.
+- Tres ritmos: Suave (520/558 días), Moderado (380/408 días) e Intensivo (300/322
+  días), según se excluyan o incluyan deuterocanónicos.
 - Distribución equilibrada de Antiguo Testamento, Nuevo Testamento y Evangelios.
-- Un capítulo de los Evangelios todos los días.
-- Dos ciclos de Salmos y cuatro ciclos de Proverbios con órdenes diferentes.
+- Dos ciclos exactos de Evangelios y Salmos, y cuatro ciclos de Proverbios.
+- Segundo ciclo de Evangelios ordenado cronológicamente.
+- Capítulos especialmente extensos priorizados para fines de semana.
 - Siete temáticas para dar énfasis y relacionar las lecturas diarias.
 - Deuterocanónicos opcionales y exclusiones específicas del programa de lectura.
 - Vistas de día, semana y calendario mensual.
 - Registro por capítulo y estados diarios: completo, parcial o no leído.
-- Estadísticas precisas del avance anual.
+- Marcado automático al abrir una lectura y confirmación antes de habilitarla otra vez.
+- Estadísticas precisas del avance del plan.
 - Seis paletas de énfasis y modos claro, oscuro o automático.
 - Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
 - Apertura prioritaria en YouVersion y alternativa a otra aplicación compatible.
@@ -104,13 +108,16 @@ Nunca deben incorporarse al repositorio.
 
 ## Verificación
 
-La suite automatizada valida años normales y bisiestos, las siete temáticas, ambos
-cánones, límites de lecturas, exclusiones, ciclos, cobertura y enlaces de las cinco
-traducciones. Antes de cada publicación también se ejecutan lint, R8 y verificación de
-la firma del APK.
+La suite automatizada valida las siete temáticas, los tres ritmos, ambos cánones, todos
+los días posibles de inicio semanal, límites diarios, exclusiones, ciclos, cobertura,
+orden cronológico, respaldos y enlaces de las cinco traducciones. Antes de cada
+publicación también se ejecutan lint, R8 y verificación de la firma del APK.
 
 ## Versiones
 
+- **1.5.0:** planes de duración variable desde el día de creación, ritmos Suave,
+  Moderado e Intensivo, calendario multianual, lectura con marcado automático y
+  navegación completamente adaptada al color de énfasis.
 - **1.2.0:** color de énfasis corregido en toda la interfaz, respaldo/restauración
   portátil del plan y el progreso, y comprobación diaria opcional de actualizaciones.
 - **1.1.0:** traducción predeterminada, PDT y NBV, contraste oscuro corregido, paleta

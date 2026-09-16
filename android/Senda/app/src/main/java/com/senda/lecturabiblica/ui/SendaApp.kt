@@ -44,8 +44,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -62,8 +62,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -74,7 +76,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -87,6 +88,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -103,7 +105,9 @@ import com.senda.lecturabiblica.model.DayPlan
 import com.senda.lecturabiblica.model.DayStatus
 import com.senda.lecturabiblica.model.ProgressStats
 import com.senda.lecturabiblica.model.Reading
+import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
+import com.senda.lecturabiblica.model.endDate
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -190,7 +194,7 @@ private fun RestoreBackupDialog(restoring: Boolean, onCancel: () -> Unit, onRest
     AlertDialog(
         onDismissRequest = { if (!restoring) onCancel() },
         title = { Text("¿Restaurar este plan?") },
-        text = { Text("El plan y el progreso guardados sustituirán los datos actuales de este año.") },
+        text = { Text("El plan y el progreso guardados sustituirán el recorrido activo actual.") },
         confirmButton = {
             Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restaurando…" else "Restaurar") }
         },
@@ -237,6 +241,7 @@ private fun LoadingScreen() {
 @Composable
 private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable { mutableStateOf("faith") }
+    var paceId by rememberSaveable { mutableStateOf(ReadingPace.MODERATE.id) }
     var extra by rememberSaveable { mutableStateOf(true) }
     var bibleVersion by rememberSaveable { mutableStateOf(state.bibleVersion) }
     val restorePlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -251,21 +256,30 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
             item {
                 Text("SENDA", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, letterSpacing = 3.sp)
                 Spacer(Modifier.height(22.dp))
-                Text("Un año en\nla Palabra.", style = MaterialTheme.typography.displaySmall)
+                Text("La Palabra,\na tu ritmo.", style = MaterialTheme.typography.displaySmall)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Un recorrido personal que conecta la Biblia entera, día a día, y guarda tu avance solamente en este dispositivo.",
+                    "Un recorrido que comienza hoy, conecta la Biblia entera y adapta cada jornada al ritmo que elijas.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
                 )
             }
             item { ThemeSelector(theme, onSelect = { theme = it }) }
+            item { ReadingPaceSelector(paceId) { paceId = it } }
             item { DeuterocanonSwitch(extra, onChange = { extra = it }) }
             item { BibleVersionDropdown(bibleVersion, onSelect = { bibleVersion = it }) }
             item {
+                val pace = ReadingPace.fromId(paceId)
+                val days = pace.durationDays(extra)
+                val finish = state.currentDate.plusDays(days.toLong() - 1)
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("Tu recorrido incluirá", style = MaterialTheme.typography.titleMedium)
-                        Text("• Un Evangelio todos los días\n• Salmos cada semestre\n• Proverbios cada trimestre\n• 2–4 lecturas en fin de semana; hasta 5 entre semana")
+                        Text("Un recorrido hecho para ti", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "• Comienza hoy y finaliza aproximadamente el ${finish.format(shortDate)}\n" +
+                                "• $days días al ritmo ${pace.label.lowercase()}\n" +
+                                "• Dos recorridos de Evangelios y Salmos\n" +
+                                "• Cuatro recorridos de Proverbios",
+                        )
                     }
                 }
             }
@@ -273,10 +287,10 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 Button(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     enabled = !state.generating,
-                    onClick = { viewModel.generate(theme, extra, false, bibleVersion) },
+                    onClick = { viewModel.generate(theme, extra, ReadingPace.fromId(paceId), false, bibleVersion) },
                 ) {
                     if (state.generating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                    else Text("Crear mi plan de ${LocalDate.now().year}")
+                    else Text("Crear mi plan ahora")
                 }
             }
             item {
@@ -297,13 +311,23 @@ private fun Planner(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMode
         val wide = maxWidth >= 760.dp
         if (wide) {
             Row(Modifier.fillMaxSize()) {
-                NavigationRail(Modifier.fillMaxHeight().statusBarsPadding()) {
+                NavigationRail(
+                    modifier = Modifier.fillMaxHeight().statusBarsPadding(),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ) {
                     Spacer(Modifier.height(20.dp))
                     Destination.entries.forEach { item ->
                         NavigationRailItem(
                             selected = destination == item,
                             onClick = { destinationName = item.name },
                             icon = { DestinationGlyph(item) }, label = { Text(item.label) },
+                            colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                unselectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
                         )
                     }
                 }
@@ -312,12 +336,22 @@ private fun Planner(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMode
         } else {
             Scaffold(
                 bottomBar = {
-                    NavigationBar(Modifier.navigationBarsPadding()) {
+                    NavigationBar(
+                        modifier = Modifier.navigationBarsPadding(),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
                         Destination.entries.forEach { item ->
                             NavigationBarItem(
                                 selected = destination == item,
                                 onClick = { destinationName = item.name },
                                 icon = { DestinationGlyph(item) }, label = { Text(item.label, maxLines = 1) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
                             )
                         }
                     }
@@ -349,7 +383,8 @@ private fun PlannerContent(
             title = {
                 Column {
                     Text("Senda", style = MaterialTheme.typography.titleLarge)
-                    Text("${plan.year} · ${BibleData.themes.first { it.id == plan.theme }.name}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val rhythm = if (plan.pace == ReadingPace.LEGACY) "Plan anual" else plan.pace.label
+                    Text("$rhythm · ${BibleData.themes.first { it.id == plan.theme }.name}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -358,7 +393,7 @@ private fun PlannerContent(
             when (screen) {
                 Destination.DAY -> DayScreen(plan, state, viewModel)
                 Destination.WEEK -> WeekScreen(plan, state, viewModel)
-                Destination.MONTH -> MonthScreen(plan, viewModel)
+                Destination.MONTH -> MonthScreen(plan, state, viewModel)
                 Destination.SETTINGS -> SettingsScreen(state, viewModel)
                 Destination.ADVANCED -> AdvancedScreen(plan, state, viewModel)
             }
@@ -368,9 +403,9 @@ private fun PlannerContent(
 
 @Composable
 private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
-    val initial = LocalDate.now().takeIf { it.year == plan.year } ?: plan.days.first().date
-    var dateText by rememberSaveable(plan.id) { mutableStateOf(initial.toString()) }
-    val date = LocalDate.parse(dateText)
+    val initial = state.currentDate.coerceIn(plan.startDate, plan.endDate)
+    var dateText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(initial.toString()) }
+    val date = LocalDate.parse(dateText).coerceIn(plan.startDate, plan.endDate)
     val day = plan.days.first { it.date == date }
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
@@ -379,6 +414,8 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
         item {
             DateHeading(
                 date = date,
+                dayNumber = plan.days.indexOf(day) + 1,
+                totalDays = plan.days.size,
                 onPrevious = { if (date > plan.days.first().date) dateText = date.minusDays(1).toString() },
                 onNext = { if (date < plan.days.last().date) dateText = date.plusDays(1).toString() },
             )
@@ -388,7 +425,14 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
             ProgressSummary(done, day.readings.size)
         }
         items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
-            ReadingCard(day, index, "$date#$index" in state.completed, state.bibleVersion) { viewModel.toggleReading(date, index) }
+            ReadingCard(
+                day = day,
+                index = index,
+                complete = "$date#$index" in state.completed,
+                defaultVersion = state.bibleVersion,
+                onComplete = { viewModel.markReadingComplete(date, index) },
+                onReread = { viewModel.markReadingForReread(date, index) },
+            )
         }
         item {
             Text(day.connection, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))
@@ -397,11 +441,11 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
 }
 
 @Composable
-private fun DateHeading(date: LocalDate, onPrevious: () -> Unit, onNext: () -> Unit) {
+private fun DateHeading(date: LocalDate, dayNumber: Int, totalDays: Int, onPrevious: () -> Unit, onNext: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(date.format(longDate).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.headlineMedium)
-            Text("Día ${date.dayOfYear} de ${date.lengthOfYear()}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text("Día $dayNumber de $totalDays", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
         }
         IconButton(onClick = onPrevious) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Día anterior") }
         IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Día siguiente") }
@@ -423,10 +467,19 @@ private fun ProgressSummary(done: Int, total: Int) {
 }
 
 @Composable
-private fun ReadingCard(day: DayPlan, index: Int, complete: Boolean, defaultVersion: String, onToggle: () -> Unit) {
+private fun ReadingCard(
+    day: DayPlan,
+    index: Int,
+    complete: Boolean,
+    defaultVersion: String,
+    onComplete: () -> Unit,
+    onReread: () -> Unit,
+) {
     val reading = day.readings[index]
     val context = androidx.compose.ui.platform.LocalContext.current
     var showVersions by remember { mutableStateOf(false) }
+    var confirmReread by remember { mutableStateOf(false) }
+    val completedDecoration = if (complete) TextDecoration.LineThrough else TextDecoration.None
     Card(
         colors = CardDefaults.cardColors(containerColor = if (complete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, if (complete) MaterialTheme.colorScheme.primary.copy(alpha = .35f) else MaterialTheme.colorScheme.outline.copy(alpha = .24f)),
@@ -434,22 +487,56 @@ private fun ReadingCard(day: DayPlan, index: Int, complete: Boolean, defaultVers
         Column(Modifier.fillMaxWidth().padding(start = 18.dp, top = 16.dp, end = 8.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(reading.label, style = MaterialTheme.typography.titleMedium)
-                    Text(readingCaption(reading), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        reading.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        textDecoration = completedDecoration,
+                        color = if (complete) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        readingCaption(reading),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        textDecoration = completedDecoration,
+                    )
                 }
-                Checkbox(checked = complete, onCheckedChange = { onToggle() }, modifier = Modifier.semantics { contentDescription = "Marcar ${reading.label} como leída" })
+                Checkbox(
+                    checked = complete,
+                    onCheckedChange = { if (complete) confirmReread = true else onComplete() },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (complete) "Volver a habilitar ${reading.label}" else "Marcar ${reading.label} como leída"
+                    },
+                )
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { openBible(context, reading, defaultVersion) }) {
+                TextButton(
+                    enabled = !complete,
+                    onClick = { onComplete(); openBible(context, reading, defaultVersion) },
+                ) {
                     Text("Leer ahora…"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(17.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { showVersions = true }) { Icon(Icons.Default.MoreVert, "Elegir versión bíblica") }
+                IconButton(enabled = !complete, onClick = { showVersions = true }) {
+                    Icon(Icons.Default.MoreVert, "Elegir versión bíblica")
+                }
             }
         }
     }
     if (showVersions) VersionDialog(reading, onDismiss = { showVersions = false }) { version ->
-        showVersions = false; openBible(context, reading, version)
+        showVersions = false; onComplete(); openBible(context, reading, version)
+    }
+    if (confirmReread) {
+        AlertDialog(
+            onDismissRequest = { confirmReread = false },
+            title = { Text("Lectura completada") },
+            text = { Text("Esta lectura ha sido completada. ¿Estás seguro (a) que quieres volver a leer este capítulo?") },
+            confirmButton = {
+                Button(onClick = { confirmReread = false; onReread() }) { Text("Sí, leer nuevamente") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReread = false }) { Text("Ya he leído") }
+            },
+        )
     }
 }
 
@@ -484,12 +571,12 @@ private fun VersionDialog(reading: Reading, onDismiss: () -> Unit, onChoose: (St
 
 @Composable
 private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
-    val today = LocalDate.now().takeIf { it.year == plan.year } ?: plan.days.first().date
-    var anchorText by rememberSaveable(plan.id) { mutableStateOf(today.toString()) }
-    var selectedText by rememberSaveable(plan.id) { mutableStateOf(today.toString()) }
+    val today = state.currentDate.coerceIn(plan.startDate, plan.endDate)
+    var anchorText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(today.toString()) }
+    var selectedText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(today.toString()) }
     val anchor = LocalDate.parse(anchorText)
     val monday = anchor.minusDays((anchor.dayOfWeek.value - 1).toLong())
-    val available = (0L..6L).map { monday.plusDays(it) }.filter { it.year == plan.year }
+    val available = (0L..6L).map { monday.plusDays(it) }.filter { it in plan.startDate..plan.endDate }
     val selected = LocalDate.parse(selectedText).takeIf { it in available } ?: available.first()
     val day = plan.days.first { it.date == selected }
     LazyColumn(
@@ -503,10 +590,12 @@ private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewM
                     Text("${monday.format(shortDate)} — ${monday.plusDays(6).format(shortDate)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = {
-                    val prior = anchor.minusWeeks(1); if (prior.year == plan.year || prior.plusDays(6).year == plan.year) anchorText = prior.toString()
+                    val prior = anchor.minusWeeks(1)
+                    if (prior.plusDays(6) >= plan.startDate) anchorText = prior.coerceAtLeast(plan.startDate).toString()
                 }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Semana anterior") }
                 IconButton(onClick = {
-                    val next = anchor.plusWeeks(1); if (next.year == plan.year || next.minusDays(6).year == plan.year) anchorText = next.toString()
+                    val next = anchor.plusWeeks(1)
+                    if (next.minusDays(6) <= plan.endDate) anchorText = next.coerceAtMost(plan.endDate).toString()
                 }) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Semana siguiente") }
             }
         }
@@ -532,7 +621,14 @@ private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewM
         }
         item { Text(selected.format(longDate).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.titleLarge) }
         items(day.readings.indices.toList()) { index ->
-            ReadingCard(day, index, "$selected#$index" in state.completed, state.bibleVersion) { viewModel.toggleReading(selected, index) }
+            ReadingCard(
+                day = day,
+                index = index,
+                complete = "$selected#$index" in state.completed,
+                defaultVersion = state.bibleVersion,
+                onComplete = { viewModel.markReadingComplete(selected, index) },
+                onReread = { viewModel.markReadingForReread(selected, index) },
+            )
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
@@ -545,12 +641,17 @@ private fun StatusDot(status: DayStatus) {
 }
 
 @Composable
-private fun MonthScreen(plan: ReadingPlan, viewModel: AppViewModel) {
-    val current = LocalDate.now().takeIf { it.year == plan.year } ?: plan.days.first().date
-    var month by rememberSaveable(plan.id) { mutableIntStateOf(current.monthValue) }
-    var selectedText by rememberSaveable(plan.id) { mutableStateOf(current.toString()) }
-    val yearMonth = YearMonth.of(plan.year, month)
-    val selected = LocalDate.parse(selectedText).takeIf { YearMonth.from(it) == yearMonth }
+private fun MonthScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
+    val current = state.currentDate.coerceIn(plan.startDate, plan.endDate)
+    val firstMonth = YearMonth.from(plan.startDate)
+    val lastMonth = YearMonth.from(plan.endDate)
+    var monthText by rememberSaveable(plan.id, state.currentDate.toString()) {
+        mutableStateOf(YearMonth.from(current).toString())
+    }
+    var selectedText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(current.toString()) }
+    val yearMonth = YearMonth.parse(monthText).coerceIn(firstMonth, lastMonth)
+    val selected = LocalDate.parse(selectedText)
+        .takeIf { YearMonth.from(it) == yearMonth && it in plan.startDate..plan.endDate }
     LazyColumn(
         modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -558,14 +659,30 @@ private fun MonthScreen(plan: ReadingPlan, viewModel: AppViewModel) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(yearMonth.month.getDisplayName(TextStyle.FULL, spanish).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "${yearMonth.month.getDisplayName(TextStyle.FULL, spanish).replaceFirstChar { it.uppercase(spanish) }} ${yearMonth.year}",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
                     Text("Toca un día para ver su estado", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(enabled = month > 1, onClick = { month-- }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Mes anterior") }
-                IconButton(enabled = month < 12, onClick = { month++ }) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Mes siguiente") }
+                IconButton(enabled = yearMonth > firstMonth, onClick = { monthText = yearMonth.minusMonths(1).toString() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Mes anterior")
+                }
+                IconButton(enabled = yearMonth < lastMonth, onClick = { monthText = yearMonth.plusMonths(1).toString() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "Mes siguiente")
+                }
             }
         }
-        item { CalendarGrid(yearMonth, current, selected, viewModel) { selectedText = it.toString() } }
+        item {
+            CalendarGrid(
+                month = yearMonth,
+                today = state.currentDate,
+                selected = selected,
+                planStart = plan.startDate,
+                planEnd = plan.endDate,
+                viewModel = viewModel,
+            ) { selectedText = it.toString() }
+        }
         item { CalendarLegend() }
         selected?.let { date ->
             item {
@@ -589,7 +706,15 @@ private fun MonthScreen(plan: ReadingPlan, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun CalendarGrid(month: YearMonth, today: LocalDate, selected: LocalDate?, viewModel: AppViewModel, onSelect: (LocalDate) -> Unit) {
+private fun CalendarGrid(
+    month: YearMonth,
+    today: LocalDate,
+    selected: LocalDate?,
+    planStart: LocalDate,
+    planEnd: LocalDate,
+    viewModel: AppViewModel,
+    onSelect: (LocalDate) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(Modifier.fillMaxWidth()) {
             listOf("L", "M", "X", "J", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -601,13 +726,32 @@ private fun CalendarGrid(month: YearMonth, today: LocalDate, selected: LocalDate
                 (week + List(7 - week.size) { null }).forEach { date ->
                     Box(Modifier.weight(1f).padding(2.dp), contentAlignment = Alignment.Center) {
                         if (date != null) {
+                            val enabled = date in planStart..planEnd
                             val status = viewModel.dayStatus(date)
-                            val label = when (status) { DayStatus.COMPLETE -> "completo"; DayStatus.PARTIAL -> "parcial"; DayStatus.NONE -> "no leído" }
+                            val label = if (!enabled) "fuera del plan" else when (status) {
+                                DayStatus.COMPLETE -> "completo"
+                                DayStatus.PARTIAL -> "parcial"
+                                DayStatus.NONE -> "no leído"
+                            }
                             Surface(
-                                modifier = Modifier.size(43.dp).semantics { contentDescription = "$date, $label" }.clickable { onSelect(date) },
-                                shape = CircleShape, color = statusColor(status),
-                                border = when { date == today -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary); date == selected -> BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface); else -> null },
-                            ) { Box(contentAlignment = Alignment.Center) { Text("${date.dayOfMonth}", fontWeight = if (date == selected) FontWeight.Bold else FontWeight.Medium, color = statusTextColor(status)) } }
+                                modifier = Modifier.size(43.dp).semantics { contentDescription = "$date, $label" }
+                                    .clickable(enabled = enabled) { onSelect(date) },
+                                shape = CircleShape,
+                                color = if (enabled) statusColor(status) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .38f),
+                                border = when {
+                                    enabled && date == today -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                    enabled && date == selected -> BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
+                                    else -> null
+                                },
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "${date.dayOfMonth}",
+                                        fontWeight = if (date == selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (enabled) statusTextColor(status) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .38f),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -629,9 +773,17 @@ private fun statusTextColor(status: DayStatus) = when (status) {
 
 @Composable
 private fun CalendarLegend() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         listOf(DayStatus.COMPLETE to "Completo", DayStatus.PARTIAL to "Parcial", DayStatus.NONE to "No leído").forEach { (status, text) ->
             Row(verticalAlignment = Alignment.CenterVertically) { StatusDot(status); Text(text, Modifier.padding(start = 7.dp), style = MaterialTheme.typography.labelMedium) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(top = 5.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
+            Text("Fuera del plan", Modifier.padding(start = 7.dp), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -678,22 +830,15 @@ private fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
         }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Settings, null); Column(Modifier.padding(start = 14.dp)) {
-                        Text("Guardado local", fontWeight = FontWeight.SemiBold)
-                        Text("Tu plan y progreso permanecen en este dispositivo y pueden incluirse en su copia de seguridad.", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-        }
     }
 }
 
 @Composable
 private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable(plan.id) { mutableStateOf(plan.theme) }
+    var paceId by rememberSaveable(plan.id) {
+        mutableStateOf(plan.pace.takeIf { it in ReadingPace.selectable }?.id ?: ReadingPace.MODERATE.id)
+    }
     var extra by rememberSaveable(plan.id) { mutableStateOf(plan.includeDeuterocanon) }
     var confirm by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -723,6 +868,7 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
             Text("Ajusta el énfasis del recorrido o genera uno nuevo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item { ThemeDropdown(theme) { theme = it } }
+        item { ReadingPaceSelector(paceId) { paceId = it } }
         item { DeuterocanonSwitch(extra) { extra = it } }
         item { BibleVersionDropdown(state.bibleVersion, viewModel::setBibleVersion) }
         item {
@@ -754,7 +900,10 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
             title = { Text("¿Sustituir el plan actual?") },
             text = { Text("Se creará un recorrido diferente y todo el progreso marcado volverá a 0 %. Esta acción no puede deshacerse.") },
             confirmButton = {
-                Button(onClick = { confirm = false; viewModel.generate(theme, extra, true, state.bibleVersion) }) { Text("Sí, generar") }
+                Button(onClick = {
+                    confirm = false
+                    viewModel.generate(theme, extra, ReadingPace.fromId(paceId), true, state.bibleVersion)
+                }) { Text("Sí, generar") }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancelar") } },
         )
@@ -781,6 +930,55 @@ private fun ThemeSelector(selected: String, onSelect: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReadingPaceSelector(selected: String, onSelect: (String) -> Unit) {
+    var information by remember { mutableStateOf<ReadingPace?>(null) }
+    Column {
+        Text("Adapte su ritmo de lectura", style = MaterialTheme.typography.titleLarge)
+        Text("Elige cuánto deseas leer en cada jornada.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            ReadingPace.selectable.forEach { pace ->
+                val isSelected = selected == pace.id
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(pace.id) },
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        if (isSelected) 2.dp else 1.dp,
+                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .3f),
+                    ),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 18.dp, top = 10.dp, end = 8.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(pace.label, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Hasta ${pace.weekdayMaximum} entre semana · ${pace.weekendMaximum} en fin de semana",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { information = pace }) {
+                            Icon(Icons.Default.Info, "Información sobre el ritmo ${pace.label}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    information?.let { pace ->
+        AlertDialog(
+            onDismissRequest = { information = null },
+            title = { Text(pace.label) },
+            text = { Text(pace.information) },
+            confirmButton = { TextButton(onClick = { information = null }) { Text("Entendido") } },
+        )
     }
 }
 

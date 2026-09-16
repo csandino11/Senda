@@ -15,7 +15,9 @@ import com.senda.lecturabiblica.domain.PlanGenerator
 import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.model.DayStatus
 import com.senda.lecturabiblica.model.ProgressStats
+import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
+import com.senda.lecturabiblica.model.endDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,57 +42,85 @@ data class AppUiState(
     val restoringBackup: Boolean = false,
     val notice: String? = null,
     val availableUpdate: AppUpdate? = null,
+    val currentDate: LocalDate = LocalDate.now(),
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store = PlanStore(application)
     private val updates = UpdateRepository(application)
-    private val year = LocalDate.now().year
     private val mutableState = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            val plan = store.loadPlan(year)
+            val today = LocalDate.now()
+            val plan = store.loadActivePlan(today.year)
             val validPlan = plan?.takeIf { runCatching { PlanGenerator.validate(it) }.isSuccess }
+                ?.takeIf { today <= it.endDate }
+            if (plan != null && validPlan == null && today > plan.endDate) store.clearActivePlan()
             mutableState.update { current ->
                 AppUiState(
-                    plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(year),
+                    plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(),
                     loading = false, themeMode = store.themeMode(), accent = store.accent(),
                     bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
                     pendingRestore = current.pendingRestore,
+                    currentDate = today,
                 )
             }
             checkForUpdates()
         }
     }
 
-    fun generate(theme: String, includeDeuterocanon: Boolean, replace: Boolean, bibleVersion: String) {
+    fun generate(
+        theme: String,
+        includeDeuterocanon: Boolean,
+        pace: ReadingPace,
+        replace: Boolean,
+        bibleVersion: String,
+    ) {
         if (mutableState.value.generating) return
         mutableState.update { it.copy(generating = true, error = null) }
         viewModelScope.launch {
             runCatching {
-                withContext(Dispatchers.Default) { PlanGenerator.generate(year, theme, includeDeuterocanon) }
+                withContext(Dispatchers.Default) {
+                    PlanGenerator.generate(LocalDate.now(), theme, includeDeuterocanon, pace)
+                }
             }.onSuccess { plan ->
                 withContext(Dispatchers.IO) {
                     if (replace) store.replacePlan(plan) else store.savePlan(plan)
                     store.saveBibleVersion(bibleVersion)
                 }
-                mutableState.update { it.copy(plan = plan, completed = emptySet(), generating = false, bibleVersion = bibleVersion) }
+                mutableState.update {
+                    it.copy(
+                        plan = plan,
+                        completed = emptySet(),
+                        generating = false,
+                        bibleVersion = bibleVersion,
+                        currentDate = plan.startDate,
+                    )
+                }
             }.onFailure { cause ->
                 mutableState.update { it.copy(generating = false, error = cause.message ?: "No se pudo generar el plan.") }
             }
         }
     }
 
-    fun toggleReading(date: LocalDate, index: Int) {
-        val plan = mutableState.value.plan ?: return
+    fun markReadingComplete(date: LocalDate, index: Int) {
+        if (mutableState.value.plan == null) return
         val key = completionKey(date, index)
-        val updated = mutableState.value.completed.toMutableSet().apply {
-            if (!add(key)) remove(key)
-        }.toSet()
+        if (key in mutableState.value.completed) return
+        val updated = mutableState.value.completed + key
         mutableState.update { it.copy(completed = updated) }
-        store.saveCompleted(plan.year, updated)
+        store.saveCompleted(updated)
+    }
+
+    fun markReadingForReread(date: LocalDate, index: Int) {
+        if (mutableState.value.plan == null) return
+        val key = completionKey(date, index)
+        if (key !in mutableState.value.completed) return
+        val updated = mutableState.value.completed - key
+        mutableState.update { it.copy(completed = updated) }
+        store.saveCompleted(updated)
     }
 
     fun isComplete(date: LocalDate, index: Int): Boolean = completionKey(date, index) in mutableState.value.completed
@@ -131,7 +161,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val bytes = PlanBackupCodec.encode(PlanBackupData(plan, snapshot.completed, snapshot.bibleVersion))
-                PlanBackupFiles.saveToDownloads(getApplication(), bytes, plan.year)
+                PlanBackupFiles.saveToDownloads(getApplication(), bytes, plan)
             }.onSuccess { saved ->
                 mutableState.update { it.copy(savingBackup = false, savedBackup = saved) }
             }.onFailure { cause ->
@@ -160,10 +190,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     "No se pudo abrir el archivo seleccionado."
                 }
                 val backup = input.use(PlanBackupCodec::decode)
-                require(backup.plan.year == year) {
-                    "El respaldo corresponde al año ${backup.plan.year}; esta instalación utiliza el plan de $year."
-                }
                 PlanGenerator.validate(backup.plan)
+                require(LocalDate.now() <= backup.plan.endDate) {
+                    "Este plan finalizó el ${backup.plan.endDate} y ya no puede restaurarse como plan activo."
+                }
                 require(bibleTranslations.any { it.id == backup.bibleVersion }) {
                     "El respaldo contiene una traducción bíblica no compatible."
                 }
@@ -197,6 +227,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun dismissNotice() = mutableState.update { it.copy(notice = null) }
+
+    fun onAppForeground() {
+        val today = LocalDate.now()
+        val snapshot = mutableState.value
+        if (today == snapshot.currentDate) return
+        val expired = snapshot.plan?.let { today > it.endDate } == true
+        mutableState.update {
+            it.copy(
+                currentDate = today,
+                plan = if (expired) null else it.plan,
+                completed = if (expired) emptySet() else it.completed,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (expired) store.clearActivePlan()
+            checkForUpdates()
+        }
+    }
 
     fun ignoreUpdate() {
         store.snoozeUpdates(LocalDate.now().plusDays(1).toEpochDay())

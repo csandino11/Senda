@@ -3,8 +3,11 @@ package com.senda.lecturabiblica.domain
 import com.senda.lecturabiblica.data.BibleData
 import com.senda.lecturabiblica.data.PlanBackupCodec
 import com.senda.lecturabiblica.data.PlanBackupData
+import com.senda.lecturabiblica.data.PlanJson
 import com.senda.lecturabiblica.data.isNewerVersion
 import com.senda.lecturabiblica.model.Reading
+import com.senda.lecturabiblica.model.ReadingPace
+import com.senda.lecturabiblica.model.endDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -16,18 +19,38 @@ import java.time.DayOfWeek
 
 class PlanGeneratorTest {
     @Test
-    fun everyThemeAndCanonOptionProducesACompleteValidYear() {
-        listOf(2026, 2028).forEach { year ->
-            BibleData.themes.forEachIndexed { index, theme ->
+    fun everyThemePaceAndCanonOptionProducesACompleteValidPlan() {
+        val start = java.time.LocalDate.of(2026, 9, 16)
+        BibleData.themes.forEachIndexed { index, theme ->
+            ReadingPace.selectable.forEachIndexed { paceIndex, pace ->
                 listOf(false, true).forEach { extra ->
-                    val plan = PlanGenerator.generate(year, theme.id, extra, year * 100L + index + if (extra) 50 else 0)
+                    val plan = PlanGenerator.generate(
+                        start,
+                        theme.id,
+                        extra,
+                        pace,
+                        index * 100L + paceIndex * 10L + if (extra) 1 else 0,
+                    )
                     val result = PlanGenerator.validate(plan)
-                    assertEquals(if (year == 2028) 366 else 365, result.days)
-                    assertTrue(plan.days.all { it.readings.count { reading -> reading.isGospel } == 1 })
+                    assertEquals(pace.durationDays(extra), result.days)
+                    assertEquals(if (extra) 1497 else 1407, result.readings)
+                    assertEquals(start.plusDays(result.days.toLong() - 1), plan.endDate)
                     assertTrue(plan.days.all { day ->
-                        day.readings.size <= if (day.date.dayOfWeek in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)) 4 else 5
+                        day.readings.size <= if (day.date.dayOfWeek in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)) {
+                            pace.weekendMaximum
+                        } else {
+                            pace.weekdayMaximum
+                        }
                     })
-                    assertTrue(plan.days.all { it.readings.size >= 3 })
+                    assertTrue(plan.days.all { it.readings.isNotEmpty() })
+                    val longPlacements = plan.days.flatMap { day ->
+                        day.readings.filter { BibleData.isLongChapter(it.book, it.chapter) }
+                            .map { day.date to it }
+                    }
+                    val longWeekendCount = longPlacements.count { (date) ->
+                        date.dayOfWeek in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+                    }
+                    assertTrue(longWeekendCount >= longPlacements.size * 3 / 4)
                     assertFalse(plan.days.flatMap { it.readings }.any { it.key in setOf("GEN.10", "GEN.36", "JDG.5", "EZK.40") })
                     if (!extra) assertFalse(plan.days.flatMap { it.readings }.any { it.isDeuterocanonical })
                 }
@@ -36,19 +59,41 @@ class PlanGeneratorTest {
     }
 
     @Test
+    fun everyStartingWeekdayHasEnoughCapacityForEveryPaceAndCanon() {
+        val monday = java.time.LocalDate.of(2026, 9, 14)
+        (0L..6L).forEach { offset ->
+            ReadingPace.selectable.forEach { pace ->
+                listOf(false, true).forEach { extra ->
+                    val plan = PlanGenerator.generate(
+                        monday.plusDays(offset),
+                        "faith",
+                        extra,
+                        pace,
+                        9_000L + offset * 100 + pace.ordinal * 10 + if (extra) 1 else 0,
+                    )
+                    assertEquals(pace.durationDays(extra), PlanGenerator.validate(plan).days)
+                }
+            }
+        }
+    }
+
+    @Test
     fun seedsCreateUniquePlans() {
-        val one = PlanGenerator.generate(2026, "faith", true, 1)
-        val two = PlanGenerator.generate(2026, "faith", true, 2)
+        val start = java.time.LocalDate.of(2026, 9, 16)
+        val one = PlanGenerator.generate(start, "faith", true, ReadingPace.MODERATE, 1)
+        val two = PlanGenerator.generate(start, "faith", true, ReadingPace.MODERATE, 2)
         assertNotEquals(one.days, two.days)
     }
 
     @Test
     fun explicitCyclesHaveExactCoverage() {
-        val plan = PlanGenerator.generate(2026, "wisdom", true, 77)
+        val plan = PlanGenerator.generate(
+            java.time.LocalDate.of(2026, 9, 16), "wisdom", true, ReadingPace.INTENSIVE, 77,
+        )
         val readings = plan.days.flatMap { it.readings }
         assertEquals(300, readings.count { it.book == "PSA" })
         assertEquals(124, readings.count { it.book == "PRO" })
-        assertEquals(365, readings.count { it.isGospel })
+        assertEquals(178, readings.count { it.isGospel })
         assertEquals(2, readings.filter { it.book == "PSA" }.map { it.cycle }.distinct().size)
         assertEquals(4, readings.filter { it.book == "PRO" }.map { it.cycle }.distinct().size)
     }
@@ -75,8 +120,10 @@ class PlanGeneratorTest {
 
     @Test
     fun backupRoundTripPreservesPlanProgressAndVersionInACompactFile() {
-        val plan = PlanGenerator.generate(2026, "hope", true, 120L)
-        val completed = setOf("2026-01-01#0", "2026-01-01#1", "2026-03-14#2")
+        val plan = PlanGenerator.generate(
+            java.time.LocalDate.of(2026, 9, 16), "hope", true, ReadingPace.MODERATE, 120L,
+        )
+        val completed = setOf("2026-09-16#0", "2026-09-16#1", "2027-03-14#2")
         val encoded = PlanBackupCodec.encode(PlanBackupData(plan, completed, "NBV"))
         val restored = PlanBackupCodec.decode(ByteArrayInputStream(encoded))
 
@@ -88,7 +135,7 @@ class PlanGeneratorTest {
 
     @Test
     fun semanticVersionComparisonOnlyAcceptsNewerReleases() {
-        assertTrue(isNewerVersion("1.1.0", "1.2.0"))
+        assertTrue(isNewerVersion("1.2.0", "1.5.0"))
         assertTrue(isNewerVersion("1.9.9", "2.0.0"))
         assertFalse(isNewerVersion("1.2.0", "1.2.0"))
         assertFalse(isNewerVersion("1.2.0", "1.1.9"))
@@ -102,5 +149,21 @@ class PlanGeneratorTest {
         } catch (_: IllegalArgumentException) {
             // Resultado esperado.
         }
+    }
+
+    @Test
+    fun plansFromPreviousVersionsKeepTheirAnnualCompatibilityDefaults() {
+        val current = PlanGenerator.generate(
+            java.time.LocalDate.of(2026, 9, 16), "faith", false, ReadingPace.INTENSIVE, 33L,
+        )
+        val legacyJson = PlanJson.encode(current).apply {
+            put("version", 2)
+            remove("startDate")
+            remove("pace")
+        }
+        val restored = PlanJson.decode(legacyJson)
+
+        assertEquals(ReadingPace.LEGACY, restored.pace)
+        assertEquals(java.time.LocalDate.of(2026, 1, 1), restored.startDate)
     }
 }
