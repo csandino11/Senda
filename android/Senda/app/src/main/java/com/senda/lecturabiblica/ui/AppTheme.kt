@@ -11,8 +11,8 @@ data class AccentPalette(val id: String, val name: String, val color: Color, val
 
 val accentPalettes = listOf(
     AccentPalette("bosque", "Bosque", Color(0xFF176B50), Color(0xFF8DDBB9)),
-    AccentPalette("cielo", "Cielo", Color(0xFF2466A8), Color(0xFF9CCAFF)),
-    AccentPalette("coral", "Coral", Color(0xFFA83E4C), Color(0xFFFFB2BA)),
+    AccentPalette("cielo", "Cielo", Color(0xFF0077B6), Color(0xFF71D2FF)),
+    AccentPalette("anil", "Añil", Color(0xFF3547A8), Color(0xFFBAC3FF)),
     AccentPalette("violeta", "Violeta", Color(0xFF7153A7), Color(0xFFD4BBFF)),
     AccentPalette("mango", "Mango", Color(0xFF8A5900), Color(0xFFFFBA47)),
     AccentPalette("fucsia", "Fucsia", Color(0xFFA10069), Color(0xFFFFAFD7)),

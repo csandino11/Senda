@@ -71,6 +71,7 @@ class PlanStore(context: Context) {
     fun themeMode(): String = preferences.getString("theme_mode", "system") ?: "system"
     fun accent(): String = when (val saved = preferences.getString("accent", "bosque") ?: "bosque") {
         "turquesa" -> "fucsia"
+        "coral" -> "anil"
         else -> saved
     }
     fun saveAppearance(mode: String, accent: String) {

@@ -13,31 +13,44 @@ data class AppUpdate(val version: String, val downloadUrl: String)
 
 class UpdateRepository(private val context: Context) {
     private val latestReleaseApi = "https://api.github.com/repos/csandino11/Senda/releases/latest"
+    private val latestReleasePage = "https://github.com/csandino11/Senda/releases/latest"
 
-    fun findUpdate(): AppUpdate? {
+    fun findUpdate(): AppUpdate? = runCatching(::findFromApi)
+        .getOrElse { findFromLatestReleaseRedirect() }
+
+    private fun findFromApi(): AppUpdate? {
         val connection = URL(latestReleaseApi).openConnection() as HttpURLConnection
         return try {
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 7_000
+            connection.connectTimeout = 8_000
+            connection.readTimeout = 10_000
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             connection.setRequestProperty("User-Agent", "Senda-Android")
+            connection.setRequestProperty("Cache-Control", "no-cache")
             check(connection.responseCode == HttpURLConnection.HTTP_OK) { "GitHub no respondió correctamente." }
             val body = connection.inputStream.bufferedReader().use { reader ->
                 val text = reader.readText()
                 require(text.length <= 300_000) { "La respuesta de actualización es demasiado grande." }
                 text
             }
-            val json = JSONObject(body)
-            val latestVersion = json.getString("tag_name").removePrefix("v")
-            if (!isNewerVersion(currentVersion(), latestVersion)) return null
-            val assets = json.getJSONArray("assets")
-            val downloadUrl = (0 until assets.length())
-                .map(assets::getJSONObject)
-                .firstOrNull { it.getString("name").endsWith(".apk", ignoreCase = true) }
-                ?.getString("browser_download_url")
-                ?: return null
-            require(isTrustedDownload(downloadUrl)) { "GitHub devolvió un enlace de descarga no válido." }
-            AppUpdate(latestVersion, downloadUrl)
+            updateFromReleaseJson(currentVersion(), body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun findFromLatestReleaseRedirect(): AppUpdate? {
+        val connection = URL(latestReleasePage).openConnection() as HttpURLConnection
+        return try {
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 8_000
+            connection.readTimeout = 10_000
+            connection.setRequestProperty("User-Agent", "Senda-Android")
+            connection.setRequestProperty("Cache-Control", "no-cache")
+            val response = connection.responseCode
+            check(response in 300..399) { "GitHub no devolvió la versión más reciente." }
+            val location = connection.getHeaderField("Location")
+                ?: error("GitHub no indicó la versión más reciente.")
+            updateFromReleaseLocation(currentVersion(), location)
         } finally {
             connection.disconnect()
         }
@@ -62,11 +75,44 @@ class UpdateRepository(private val context: Context) {
         return manager.enqueue(request)
     }
 
-    private fun isTrustedDownload(url: String): Boolean {
-        val uri = runCatching { URI(url) }.getOrNull() ?: return false
-        return uri.scheme == "https" && uri.host == "github.com" &&
-            uri.path.startsWith("/csandino11/Senda/releases/download/") && uri.path.endsWith(".apk")
+}
+
+internal fun updateFromReleaseJson(currentVersion: String, body: String): AppUpdate? {
+    val json = JSONObject(body)
+    val latestVersion = json.getString("tag_name").removePrefix("v")
+    if (!isNewerVersion(currentVersion, latestVersion)) return null
+    val assets = json.getJSONArray("assets")
+    val downloadUrl = (0 until assets.length())
+        .map(assets::getJSONObject)
+        .firstOrNull { it.getString("name").endsWith(".apk", ignoreCase = true) }
+        ?.getString("browser_download_url")
+        ?: error("La versión más reciente todavía no tiene un APK disponible.")
+    require(isTrustedDownload(downloadUrl)) { "GitHub devolvió un enlace de descarga no válido." }
+    return AppUpdate(latestVersion, downloadUrl)
+}
+
+internal fun updateFromReleaseLocation(currentVersion: String, location: String): AppUpdate? {
+    val releaseUri = URI("https://github.com/csandino11/Senda/releases/latest").resolve(location)
+    require(releaseUri.scheme == "https" && releaseUri.host == "github.com") {
+        "GitHub devolvió una ubicación no válida."
     }
+    val prefix = "/csandino11/Senda/releases/tag/"
+    require(releaseUri.path.startsWith(prefix)) { "GitHub devolvió una etiqueta no válida." }
+    val latestVersion = releaseUri.path.removePrefix(prefix).removePrefix("v")
+    require(latestVersion.matches(Regex("[0-9]+(?:\\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?"))) {
+        "GitHub devolvió una versión no válida."
+    }
+    if (!isNewerVersion(currentVersion, latestVersion)) return null
+    val downloadUrl = "https://github.com/csandino11/Senda/releases/download/" +
+        "v$latestVersion/Senda-$latestVersion.apk"
+    require(isTrustedDownload(downloadUrl)) { "El enlace alternativo de descarga no es válido." }
+    return AppUpdate(latestVersion, downloadUrl)
+}
+
+private fun isTrustedDownload(url: String): Boolean {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return false
+    return uri.scheme == "https" && uri.host == "github.com" &&
+        uri.path.startsWith("/csandino11/Senda/releases/download/") && uri.path.endsWith(".apk")
 }
 
 internal fun isNewerVersion(current: String, candidate: String): Boolean {

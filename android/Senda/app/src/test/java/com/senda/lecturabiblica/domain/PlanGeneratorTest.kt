@@ -5,6 +5,8 @@ import com.senda.lecturabiblica.data.PlanBackupCodec
 import com.senda.lecturabiblica.data.PlanBackupData
 import com.senda.lecturabiblica.data.PlanJson
 import com.senda.lecturabiblica.data.isNewerVersion
+import com.senda.lecturabiblica.data.updateFromReleaseJson
+import com.senda.lecturabiblica.data.updateFromReleaseLocation
 import com.senda.lecturabiblica.model.Reading
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.endDate
@@ -135,10 +137,21 @@ class PlanGeneratorTest {
 
     @Test
     fun semanticVersionComparisonOnlyAcceptsNewerReleases() {
-        assertTrue(isNewerVersion("1.2.0", "1.5.0"))
+        assertTrue(isNewerVersion("1.5.0", "1.6.0"))
         assertTrue(isNewerVersion("1.9.9", "2.0.0"))
         assertFalse(isNewerVersion("1.2.0", "1.2.0"))
         assertFalse(isNewerVersion("1.2.0", "1.1.9"))
+    }
+
+    @Test
+    fun updateDiscoveryAcceptsTheApiAndPublicFallbackOnlyForNewerVersions() {
+        val url = "https://github.com/csandino11/Senda/releases/download/v1.6.0/Senda-1.6.0.apk"
+        val json = """{"tag_name":"v1.6.0","assets":[{"name":"Senda-1.6.0.apk","browser_download_url":"$url"}]}"""
+
+        assertEquals("1.6.0", updateFromReleaseJson("1.5.0", json)?.version)
+        assertEquals(url, updateFromReleaseLocation("1.5.0", "/csandino11/Senda/releases/tag/v1.6.0")?.downloadUrl)
+        assertEquals(null, updateFromReleaseJson("1.6.0", json))
+        assertEquals(null, updateFromReleaseLocation("1.6.0", "https://github.com/csandino11/Senda/releases/tag/v1.6.0"))
     }
 
     @Test

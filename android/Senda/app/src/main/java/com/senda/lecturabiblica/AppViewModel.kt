@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class AppUiState(
     val plan: ReadingPlan? = null,
@@ -48,6 +49,7 @@ data class AppUiState(
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store = PlanStore(application)
     private val updates = UpdateRepository(application)
+    private val updateCheckRunning = AtomicBoolean(false)
     private val mutableState = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
 
@@ -231,7 +233,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun onAppForeground() {
         val today = LocalDate.now()
         val snapshot = mutableState.value
-        if (today == snapshot.currentDate) return
+        if (snapshot.loading) return
+        if (today == snapshot.currentDate) {
+            viewModelScope.launch(Dispatchers.IO) { checkForUpdates() }
+            return
+        }
         val expired = snapshot.plan?.let { today > it.endDate } == true
         mutableState.update {
             it.copy(
@@ -282,9 +288,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkForUpdates() {
         val day = LocalDate.now().toEpochDay()
         if (!store.shouldCheckForUpdate(day)) return
-        store.markUpdateChecked(day)
-        runCatching(updates::findUpdate).getOrNull()?.let { update ->
-            mutableState.update { it.copy(availableUpdate = update) }
+        if (!updateCheckRunning.compareAndSet(false, true)) return
+        try {
+            runCatching(updates::findUpdate).onSuccess { update ->
+                store.markUpdateChecked(day)
+                if (update != null) mutableState.update { it.copy(availableUpdate = update) }
+            }
+        } finally {
+            updateCheckRunning.set(false)
         }
     }
 

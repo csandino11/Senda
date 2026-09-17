@@ -21,13 +21,13 @@ carga diaria al ritmo elegido y guarda todo el progreso localmente en el disposi
 - Registro por capítulo y estados diarios: completo, parcial o no leído.
 - Marcado automático al abrir una lectura y confirmación antes de habilitarla otra vez.
 - Estadísticas precisas del avance del plan.
-- Seis paletas de énfasis y modos claro, oscuro o automático.
+- Seis paletas de énfasis y modos claro, oscuro o automático, integrados en Avanzado.
 - Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
 - Apertura prioritaria en YouVersion y alternativa a otra aplicación compatible.
 - TLAI obligatoria para las lecturas deuterocanónicas.
 - Respaldo comprimido del plan y el progreso en archivos `.senda`, restaurable en
   otra instalación o dispositivo.
-- Comprobación silenciosa de nuevas versiones publicadas en GitHub una vez al día.
+- Comprobación silenciosa y reintentable de nuevas versiones publicadas en GitHub.
 
 ## Instalación
 
@@ -110,11 +110,13 @@ Nunca deben incorporarse al repositorio.
 
 La suite automatizada valida las siete temáticas, los tres ritmos, ambos cánones, todos
 los días posibles de inicio semanal, límites diarios, exclusiones, ciclos, cobertura,
-orden cronológico, respaldos y enlaces de las cinco traducciones. Antes de cada
+orden cronológico, respaldos, descubrimiento de actualizaciones y enlaces de las cinco traducciones. Antes de cada
 publicación también se ejecutan lint, R8 y verificación de la firma del APK.
 
 ## Versiones
 
+- **1.6.0:** apariencia integrada en Avanzado, paletas Cielo y Añil renovadas, estado
+  Parcial amarillo y comprobación de actualizaciones resiliente con reintentos.
 - **1.5.0:** planes de duración variable desde el día de creación, ritmos Suave,
   Moderado e Intensivo, calendario multianual, lectura con marcado automático y
   navegación completamente adaptada al color de énfasis.

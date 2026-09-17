@@ -123,7 +123,6 @@ private enum class Destination(val label: String, val icon: Int) {
     DAY("Día", R.drawable.ic_nav_day),
     WEEK("Semana", R.drawable.ic_nav_week),
     MONTH("Mes", R.drawable.ic_nav_month),
-    SETTINGS("Ajustes", R.drawable.ic_nav_settings),
     ADVANCED("Avanzado", R.drawable.ic_nav_advanced),
 }
 
@@ -259,7 +258,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 Text("La Palabra,\na tu ritmo.", style = MaterialTheme.typography.displaySmall)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Un recorrido que comienza hoy, conecta la Biblia entera y adapta cada jornada al ritmo que elijas.",
+                    "Comienza un nuevo plan el día de hoy, y lee la Biblia entera.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
                 )
             }
@@ -271,11 +270,13 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 val pace = ReadingPace.fromId(paceId)
                 val days = pace.durationDays(extra)
                 val finish = state.currentDate.plusDays(days.toLong() - 1)
+                val finishLabel = finish.format(shortDate).trimEnd('.') + "." +
+                    if (finish.year > state.currentDate.year + 1) " (${finish.year})" else ""
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         Text("Un recorrido hecho para ti", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "• Comienza hoy y finaliza aproximadamente el ${finish.format(shortDate)}\n" +
+                            "• Comienza hoy y finaliza aproximadamente el $finishLabel\n" +
                                 "• $days días al ritmo ${pace.label.lowercase()}\n" +
                                 "• Dos recorridos de Evangelios y Salmos\n" +
                                 "• Cuatro recorridos de Proverbios",
@@ -306,7 +307,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
 @Composable
 private fun Planner(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
     var destinationName by rememberSaveable { mutableStateOf(Destination.DAY.name) }
-    val destination = Destination.valueOf(destinationName)
+    val destination = Destination.entries.firstOrNull { it.name == destinationName } ?: Destination.DAY
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 760.dp
         if (wide) {
@@ -394,7 +395,6 @@ private fun PlannerContent(
                 Destination.DAY -> DayScreen(plan, state, viewModel)
                 Destination.WEEK -> WeekScreen(plan, state, viewModel)
                 Destination.MONTH -> MonthScreen(plan, state, viewModel)
-                Destination.SETTINGS -> SettingsScreen(state, viewModel)
                 Destination.ADVANCED -> AdvancedScreen(plan, state, viewModel)
             }
         }
@@ -762,12 +762,12 @@ private fun CalendarGrid(
 
 @Composable private fun statusColor(status: DayStatus) = when (status) {
     DayStatus.COMPLETE -> Color(0xFFBCEBCB)
-    DayStatus.PARTIAL -> Color(0xFFD5D8D5)
+    DayStatus.PARTIAL -> Color(0xFFFFE69A)
     DayStatus.NONE -> Color(0xFFFFDAD6)
 }
 private fun statusTextColor(status: DayStatus) = when (status) {
     DayStatus.COMPLETE -> Color(0xFF114C2B)
-    DayStatus.PARTIAL -> Color(0xFF343735)
+    DayStatus.PARTIAL -> Color(0xFF574500)
     DayStatus.NONE -> Color(0xFF7C2924)
 }
 
@@ -784,51 +784,6 @@ private fun CalendarLegend() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.padding(top = 5.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
             Text("Fuera del plan", Modifier.padding(start = 7.dp), style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
-    ) {
-        item {
-            Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
-            Text("Personaliza la apariencia sin cambiar tu plan.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        item {
-            Text("Tema", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(10.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("system" to "Automático", "light" to "Claro", "dark" to "Oscuro").forEach { (id, label) ->
-                    FilterChip(selected = state.themeMode == id, onClick = { viewModel.setAppearance(mode = id) }, label = { Text(label) })
-                }
-            }
-        }
-        item {
-            Text("Color de énfasis", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                accentPalettes.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { palette ->
-                            Surface(
-                                modifier = Modifier.weight(1f).clickable { viewModel.setAppearance(accent = palette.id) },
-                                shape = RoundedCornerShape(18.dp),
-                                border = BorderStroke(if (state.accent == palette.id) 2.dp else 1.dp, if (state.accent == palette.id) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline.copy(alpha = .3f)),
-                            ) {
-                                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(Modifier.size(30.dp).clip(CircleShape).background(palette.color))
-                                    Text(palette.name, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 7.dp), maxLines = 1)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -865,8 +820,10 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
     ) {
         item {
             Text("Opciones avanzadas", style = MaterialTheme.typography.headlineMedium)
-            Text("Ajusta el énfasis del recorrido o genera uno nuevo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Personaliza la apariencia y las opciones de tu recorrido.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        item { AppearanceControls(state, viewModel) }
+        item { HorizontalDivider() }
         item { ThemeDropdown(theme) { theme = it } }
         item { ReadingPaceSelector(paceId) { paceId = it } }
         item { DeuterocanonSwitch(extra) { extra = it } }
@@ -910,11 +867,70 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppearanceControls(state: AppUiState, viewModel: AppViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column {
+            Text("Tema", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("system" to "Automático", "light" to "Claro", "dark" to "Oscuro").forEach { (id, label) ->
+                    FilterChip(
+                        selected = state.themeMode == id,
+                        onClick = { viewModel.setAppearance(mode = id) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+        }
+        Column {
+            Text("Color de énfasis", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                accentPalettes.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { palette ->
+                            Surface(
+                                modifier = Modifier.weight(1f).clickable {
+                                    viewModel.setAppearance(accent = palette.id)
+                                },
+                                shape = RoundedCornerShape(18.dp),
+                                border = BorderStroke(
+                                    if (state.accent == palette.id) 2.dp else 1.dp,
+                                    if (state.accent == palette.id) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.outline.copy(alpha = .3f)
+                                    },
+                                ),
+                            ) {
+                                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(Modifier.size(30.dp).clip(CircleShape).background(palette.color))
+                                    Text(
+                                        palette.name,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        modifier = Modifier.padding(top = 7.dp),
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ThemeSelector(selected: String, onSelect: (String) -> Unit) {
     Column {
         Text("¿Qué deseas profundizar?", style = MaterialTheme.typography.titleLarge)
-        Text("Las conexiones diarias darán prioridad a este hilo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "Escoge una temática y tu lectura diaria se enfocará en tu elección.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(BibleData.themes) { theme ->
@@ -938,7 +954,10 @@ private fun ReadingPaceSelector(selected: String, onSelect: (String) -> Unit) {
     var information by remember { mutableStateOf<ReadingPace?>(null) }
     Column {
         Text("Adapte su ritmo de lectura", style = MaterialTheme.typography.titleLarge)
-        Text("Elige cuánto deseas leer en cada jornada.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "Elige que tanto deseas leer, de acuerdo al tiempo que tienes para leer cada día",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(12.dp))
         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             ReadingPace.selectable.forEach { pace ->
@@ -959,7 +978,7 @@ private fun ReadingPaceSelector(selected: String, onSelect: (String) -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text(pace.label, style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Hasta ${pace.weekdayMaximum} entre semana · ${pace.weekendMaximum} en fin de semana",
+                                "Máximo ${pace.weekdayMaximum * 5 + pace.weekendMaximum * 2} capítulos semanales",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

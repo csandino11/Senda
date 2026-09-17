@@ -4,6 +4,17 @@ Aplicación Android nativa para crear y seguir un recorrido completo de lectura 
 desde el día de su creación. El plan y su progreso funcionan localmente; la red solo se
 usa para comprobar actualizaciones.
 
+## Versión 1.6.0
+
+- Controles de tema y color trasladados a Avanzado; Ajustes se reserva para futuras
+  funciones y deja de ocupar un destino de navegación.
+- Paleta Añil en sustitución de Coral y Cielo actualizado a un celeste más vibrante.
+- Estado Parcial amarillo y claramente diferenciado de los días fuera del plan.
+- Resumen de planes largos con el año de finalización cuando supera el año siguiente.
+- Descubrimiento de actualizaciones corregido: una conexión fallida ya no cuenta como
+  comprobación, se reintenta al volver a la app y existe una ruta pública alternativa.
+- Textos iniciales y límites semanales de los ritmos simplificados.
+
 ## Versión 1.5.0
 
 - Ritmos Suave, Moderado e Intensivo con límites distintos entre semana y fin de semana.
