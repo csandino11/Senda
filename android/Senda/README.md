@@ -4,6 +4,12 @@ Aplicación Android nativa para crear y seguir un recorrido completo de lectura 
 desde el día de su creación. El plan y su progreso funcionan localmente; la red solo se
 usa para comprobar actualizaciones.
 
+## Versión 1.7.1
+
+- Fondo temático extendido a toda la vista Día, incluida su cabecera.
+- Gradación adaptada a los modos claro y oscuro, con tarjetas translúcidas legibles.
+- Aviso de rendimiento aclarado en la opción Fondo Dinámico.
+
 ## Versión 1.7.0
 
 - Opciones de personalización desplegables antes de crear el primer plan.

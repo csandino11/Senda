@@ -139,7 +139,7 @@ class PlanGeneratorTest {
 
     @Test
     fun semanticVersionComparisonOnlyAcceptsNewerReleases() {
-        assertTrue(isNewerVersion("1.6.0", "1.7.0"))
+        assertTrue(isNewerVersion("1.7.0", "1.7.1"))
         assertTrue(isNewerVersion("1.9.9", "2.0.0"))
         assertFalse(isNewerVersion("1.2.0", "1.2.0"))
         assertFalse(isNewerVersion("1.2.0", "1.1.9"))
@@ -147,13 +147,13 @@ class PlanGeneratorTest {
 
     @Test
     fun updateDiscoveryAcceptsTheApiAndPublicFallbackOnlyForNewerVersions() {
-        val url = "https://github.com/csandino11/Senda/releases/download/v1.7.0/Senda-1.7.0.apk"
-        val json = """{"tag_name":"v1.7.0","assets":[{"name":"Senda-1.7.0.apk","browser_download_url":"$url"}]}"""
+        val url = "https://github.com/csandino11/Senda/releases/download/v1.7.1/Senda-1.7.1.apk"
+        val json = """{"tag_name":"v1.7.1","assets":[{"name":"Senda-1.7.1.apk","browser_download_url":"$url"}]}"""
 
-        assertEquals("1.7.0", updateFromReleaseJson("1.6.0", json)?.version)
-        assertEquals(url, updateFromReleaseLocation("1.6.0", "/csandino11/Senda/releases/tag/v1.7.0")?.downloadUrl)
-        assertEquals(null, updateFromReleaseJson("1.7.0", json))
-        assertEquals(null, updateFromReleaseLocation("1.7.0", "https://github.com/csandino11/Senda/releases/tag/v1.7.0"))
+        assertEquals("1.7.1", updateFromReleaseJson("1.7.0", json)?.version)
+        assertEquals(url, updateFromReleaseLocation("1.7.0", "/csandino11/Senda/releases/tag/v1.7.1")?.downloadUrl)
+        assertEquals(null, updateFromReleaseJson("1.7.1", json))
+        assertEquals(null, updateFromReleaseLocation("1.7.1", "https://github.com/csandino11/Senda/releases/tag/v1.7.1"))
     }
 
     @Test

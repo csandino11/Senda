@@ -86,11 +86,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
@@ -574,23 +577,59 @@ private fun PlannerContent(
     viewModel: AppViewModel,
     modifier: Modifier,
 ) {
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopAppBar(
-            title = {
-                Column {
-                    Text("Senda", style = MaterialTheme.typography.titleLarge)
-                    val rhythm = if (plan.pace == ReadingPace.LEGACY) "Plan anual" else plan.pace.label
-                    Text("$rhythm · ${BibleData.themes.first { it.id == plan.theme }.name}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val dynamicDay = destination == Destination.DAY && state.dynamicBackground
+    val darkPalette = MaterialTheme.colorScheme.background.luminance() < .5f
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (dynamicDay) {
+            Image(
+                painter = painterResource(themeBackground(plan.theme)),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            val scrim = if (darkPalette) {
+                listOf(
+                    Color.Black.copy(alpha = .62f),
+                    Color.Black.copy(alpha = .30f),
+                    Color.Black.copy(alpha = .48f),
+                )
+            } else {
+                listOf(
+                    Color.Black.copy(alpha = .48f),
+                    Color.Black.copy(alpha = .08f),
+                    Color.Black.copy(alpha = .24f),
+                )
+            }
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(scrim)))
+        }
+        Column(Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            "Senda",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = if (dynamicDay) Color.White else MaterialTheme.colorScheme.onSurface,
+                        )
+                        val rhythm = if (plan.pace == ReadingPace.LEGACY) "Plan anual" else plan.pace.label
+                        Text(
+                            "$rhythm · ${BibleData.themes.first { it.id == plan.theme }.name}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (dynamicDay) Color.White.copy(alpha = .88f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (dynamicDay) Color.Transparent else MaterialTheme.colorScheme.background,
+                ),
+            )
+            AnimatedContent(destination, modifier = Modifier.weight(1f), label = "pantalla") { screen ->
+                when (screen) {
+                    Destination.DAY -> DayScreen(plan, state, viewModel)
+                    Destination.WEEK -> WeekScreen(plan, state, viewModel)
+                    Destination.MONTH -> MonthScreen(plan, state, viewModel)
+                    Destination.ADVANCED -> AdvancedScreen(plan, state, viewModel)
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-        )
-        AnimatedContent(destination, label = "pantalla") { screen ->
-            when (screen) {
-                Destination.DAY -> DayScreen(plan, state, viewModel)
-                Destination.WEEK -> WeekScreen(plan, state, viewModel)
-                Destination.MONTH -> MonthScreen(plan, state, viewModel)
-                Destination.ADVANCED -> AdvancedScreen(plan, state, viewModel)
             }
         }
     }
@@ -602,46 +641,48 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
     var dateText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(initial.toString()) }
     val date = LocalDate.parse(dateText).coerceIn(plan.startDate, plan.endDate)
     val day = plan.days.first { it.date == date }
-    Box(Modifier.fillMaxSize()) {
-        if (state.dynamicBackground) {
-            Image(
-                painter = painterResource(themeBackground(plan.theme)),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            Box(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = .78f)),
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            DateHeading(
+                date = date,
+                dayNumber = plan.days.indexOf(day) + 1,
+                totalDays = plan.days.size,
+                dynamicBackground = state.dynamicBackground,
+                onPrevious = { if (date > plan.days.first().date) dateText = date.minusDays(1).toString() },
+                onNext = { if (date < plan.days.last().date) dateText = date.plusDays(1).toString() },
             )
         }
-        LazyColumn(
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
-        ) {
-            item {
-                DateHeading(
-                    date = date,
-                    dayNumber = plan.days.indexOf(day) + 1,
-                    totalDays = plan.days.size,
-                    onPrevious = { if (date > plan.days.first().date) dateText = date.minusDays(1).toString() },
-                    onNext = { if (date < plan.days.last().date) dateText = date.plusDays(1).toString() },
+        item {
+            val done = day.readings.indices.count { "$date#$it" in state.completed }
+            ProgressSummary(done, day.readings.size, state.dynamicBackground)
+        }
+        items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
+            ReadingCard(
+                day = day,
+                index = index,
+                complete = "$date#$index" in state.completed,
+                defaultVersion = state.bibleVersion,
+                dynamicBackground = state.dynamicBackground,
+                onComplete = { viewModel.markReadingComplete(date, index) },
+                onReread = { viewModel.markReadingForReread(date, index) },
+            )
+        }
+        item {
+            if (state.dynamicBackground) {
+                Text(
+                    day.connection,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black.copy(alpha = .48f))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                 )
-            }
-            item {
-                val done = day.readings.indices.count { "$date#$it" in state.completed }
-                ProgressSummary(done, day.readings.size)
-            }
-            items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
-                ReadingCard(
-                    day = day,
-                    index = index,
-                    complete = "$date#$index" in state.completed,
-                    defaultVersion = state.bibleVersion,
-                    onComplete = { viewModel.markReadingComplete(date, index) },
-                    onReread = { viewModel.markReadingForReread(date, index) },
-                )
-            }
-            item {
+            } else {
                 Text(
                     day.connection,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -666,20 +707,49 @@ internal val themeBackgrounds = mapOf(
 private fun themeBackground(theme: String): Int = themeBackgrounds[theme] ?: R.drawable.theme_faith
 
 @Composable
-private fun DateHeading(date: LocalDate, dayNumber: Int, totalDays: Int, onPrevious: () -> Unit, onNext: () -> Unit) {
+private fun DateHeading(
+    date: LocalDate,
+    dayNumber: Int,
+    totalDays: Int,
+    dynamicBackground: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val foreground = if (dynamicBackground) Color.White else MaterialTheme.colorScheme.onSurface
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(date.format(longDate).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.headlineMedium)
-            Text("Día $dayNumber de $totalDays", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text(
+                date.format(longDate).replaceFirstChar { it.uppercase(spanish) },
+                style = MaterialTheme.typography.headlineMedium,
+                color = foreground,
+            )
+            Text(
+                "Día $dayNumber de $totalDays",
+                color = if (dynamicBackground) Color.White.copy(alpha = .90f) else MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
-        IconButton(onClick = onPrevious) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Día anterior") }
-        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Día siguiente") }
+        IconButton(onClick = onPrevious) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Día anterior", tint = foreground)
+        }
+        IconButton(onClick = onNext) {
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, "Día siguiente", tint = foreground)
+        }
     }
 }
 
 @Composable
-private fun ProgressSummary(done: Int, total: Int) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+private fun ProgressSummary(done: Int, total: Int, dynamicBackground: Boolean) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (dynamicBackground) {
+                MaterialTheme.colorScheme.surface.copy(alpha = .93f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (dynamicBackground) 4.dp else 0.dp),
+    ) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (done == total) "Lectura del día completa" else "$done de $total capítulos leídos", fontWeight = FontWeight.SemiBold)
@@ -697,6 +767,7 @@ private fun ReadingCard(
     index: Int,
     complete: Boolean,
     defaultVersion: String,
+    dynamicBackground: Boolean,
     onComplete: () -> Unit,
     onReread: () -> Unit,
 ) {
@@ -705,9 +776,16 @@ private fun ReadingCard(
     var showVersions by remember { mutableStateOf(false) }
     var confirmReread by remember { mutableStateOf(false) }
     val completedDecoration = if (complete) TextDecoration.LineThrough else TextDecoration.None
+    val containerColor = when {
+        complete && dynamicBackground -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = .94f)
+        complete -> MaterialTheme.colorScheme.primaryContainer
+        dynamicBackground -> MaterialTheme.colorScheme.surface.copy(alpha = .95f)
+        else -> MaterialTheme.colorScheme.surface
+    }
     Card(
-        colors = CardDefaults.cardColors(containerColor = if (complete) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         border = BorderStroke(1.dp, if (complete) MaterialTheme.colorScheme.primary.copy(alpha = .35f) else MaterialTheme.colorScheme.outline.copy(alpha = .24f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (dynamicBackground) 4.dp else 0.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(start = 18.dp, top = 16.dp, end = 8.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -851,6 +929,7 @@ private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewM
                 index = index,
                 complete = "$selected#$index" in state.completed,
                 defaultVersion = state.bibleVersion,
+                dynamicBackground = false,
                 onComplete = { viewModel.markReadingComplete(selected, index) },
                 onReread = { viewModel.markReadingForReread(selected, index) },
             )
@@ -1202,8 +1281,14 @@ private fun DynamicBackgroundSelector(enabled: Boolean, onChange: (Boolean) -> U
             Column(Modifier.weight(1f)) {
                 Text("Fondo Dinámico", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Muestra en Día una imagen inspirada en la temática del plan.",
+                    "Muestra una imagen de fondo afín a la temática de tu plan.",
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Nota: Habilitar esta función puede afectar el rendimiento de la aplicación",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

@@ -118,6 +118,8 @@ publicación también se ejecutan lint, R8 y verificación de la firma del APK.
 
 ## Versiones
 
+- **1.7.1:** integración visual renovada de los fondos temáticos en la vista Día,
+  con contraste adaptado para los modos claro y oscuro.
 - **1.7.0:** fondos dinámicos temáticos, tamaño de letra ampliable, personalización
   desde el primer inicio, paleta Lumbre y descarga de actualizaciones con progreso,
   reutilización del APK e instalación guiada.
