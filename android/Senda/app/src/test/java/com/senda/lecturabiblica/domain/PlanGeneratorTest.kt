@@ -10,6 +10,8 @@ import com.senda.lecturabiblica.data.updateFromReleaseLocation
 import com.senda.lecturabiblica.model.Reading
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.endDate
+import com.senda.lecturabiblica.ui.accentPalettes
+import com.senda.lecturabiblica.ui.themeBackgrounds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -137,7 +139,7 @@ class PlanGeneratorTest {
 
     @Test
     fun semanticVersionComparisonOnlyAcceptsNewerReleases() {
-        assertTrue(isNewerVersion("1.5.0", "1.6.0"))
+        assertTrue(isNewerVersion("1.6.0", "1.7.0"))
         assertTrue(isNewerVersion("1.9.9", "2.0.0"))
         assertFalse(isNewerVersion("1.2.0", "1.2.0"))
         assertFalse(isNewerVersion("1.2.0", "1.1.9"))
@@ -145,13 +147,22 @@ class PlanGeneratorTest {
 
     @Test
     fun updateDiscoveryAcceptsTheApiAndPublicFallbackOnlyForNewerVersions() {
-        val url = "https://github.com/csandino11/Senda/releases/download/v1.6.0/Senda-1.6.0.apk"
-        val json = """{"tag_name":"v1.6.0","assets":[{"name":"Senda-1.6.0.apk","browser_download_url":"$url"}]}"""
+        val url = "https://github.com/csandino11/Senda/releases/download/v1.7.0/Senda-1.7.0.apk"
+        val json = """{"tag_name":"v1.7.0","assets":[{"name":"Senda-1.7.0.apk","browser_download_url":"$url"}]}"""
 
-        assertEquals("1.6.0", updateFromReleaseJson("1.5.0", json)?.version)
-        assertEquals(url, updateFromReleaseLocation("1.5.0", "/csandino11/Senda/releases/tag/v1.6.0")?.downloadUrl)
-        assertEquals(null, updateFromReleaseJson("1.6.0", json))
-        assertEquals(null, updateFromReleaseLocation("1.6.0", "https://github.com/csandino11/Senda/releases/tag/v1.6.0"))
+        assertEquals("1.7.0", updateFromReleaseJson("1.6.0", json)?.version)
+        assertEquals(url, updateFromReleaseLocation("1.6.0", "/csandino11/Senda/releases/tag/v1.7.0")?.downloadUrl)
+        assertEquals(null, updateFromReleaseJson("1.7.0", json))
+        assertEquals(null, updateFromReleaseLocation("1.7.0", "https://github.com/csandino11/Senda/releases/tag/v1.7.0"))
+    }
+
+    @Test
+    fun everyThemeHasOneDynamicBackgroundAndThePaletteHasNoVioletDuplicate() {
+        assertEquals(BibleData.themes.map { it.id }.toSet(), themeBackgrounds.keys)
+        assertEquals(
+            listOf("Bosque", "Cielo", "Lumbre", "Añil", "Mango", "Fucsia"),
+            accentPalettes.map { it.name },
+        )
     }
 
     @Test

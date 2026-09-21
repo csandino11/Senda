@@ -4,6 +4,17 @@ Aplicación Android nativa para crear y seguir un recorrido completo de lectura 
 desde el día de su creación. El plan y su progreso funcionan localmente; la red solo se
 usa para comprobar actualizaciones.
 
+## Versión 1.7.0
+
+- Opciones de personalización desplegables antes de crear el primer plan.
+- Tamaño de letra Normal o Grande, persistente y compatible con la escala del sistema.
+- Siete fondos dinámicos originales, uno por temática, optimizados en WebP y opcionales.
+- Paleta Lumbre en la posición anterior de Añil; Añil ocupa el lugar de Violeta.
+- Pantalla de descarga con progreso, detección del APK vigente ya descargado y
+  restauración del proceso tras cerrar o reiniciar la app.
+- Instalación guiada mediante el instalador seguro de Android e indicaciones para Play
+  Protect, con recuperación clara si la instalación se cancela o falla.
+
 ## Versión 1.6.0
 
 - Controles de tema y color trasladados a Avanzado; Ajustes se reserva para futuras

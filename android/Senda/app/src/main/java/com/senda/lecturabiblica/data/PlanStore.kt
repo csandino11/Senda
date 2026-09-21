@@ -69,13 +69,21 @@ class PlanStore(context: Context) {
     }
 
     fun themeMode(): String = preferences.getString("theme_mode", "system") ?: "system"
-    fun accent(): String = when (val saved = preferences.getString("accent", "bosque") ?: "bosque") {
+    fun accent(): String = when (val saved = preferences.getString("accent", "cielo") ?: "cielo") {
         "turquesa" -> "fucsia"
         "coral" -> "anil"
+        "violeta" -> "anil"
         else -> saved
     }
-    fun saveAppearance(mode: String, accent: String) {
-        preferences.edit { putString("theme_mode", mode); putString("accent", accent) }
+    fun fontSize(): String = preferences.getString("font_size", "normal") ?: "normal"
+    fun dynamicBackground(): Boolean = preferences.getBoolean("dynamic_background", false)
+    fun saveAppearance(mode: String, accent: String, fontSize: String, dynamicBackground: Boolean) {
+        preferences.edit {
+            putString("theme_mode", mode)
+            putString("accent", accent)
+            putString("font_size", fontSize)
+            putBoolean("dynamic_background", dynamicBackground)
+        }
     }
 
     fun bibleVersion(): String = preferences.getString("bible_version", "RVC") ?: "RVC"
@@ -95,6 +103,28 @@ class PlanStore(context: Context) {
 
     fun snoozeUpdates(untilDay: Long) {
         preferences.edit { putLong("update_snooze_until_day", untilDay) }
+    }
+
+    fun savedUpdateDownload(version: String): Long? {
+        if (preferences.getString("update_download_version", null) != version) return null
+        return preferences.getLong("update_download_id", -1L).takeIf { it >= 0L }
+    }
+
+    fun savedUpdateDownload(): Pair<String, Long>? {
+        val version = preferences.getString("update_download_version", null) ?: return null
+        val id = preferences.getLong("update_download_id", -1L).takeIf { it >= 0L } ?: return null
+        return version to id
+    }
+
+    fun saveUpdateDownload(version: String, id: Long) {
+        preferences.edit {
+            putString("update_download_version", version)
+            putLong("update_download_id", id)
+        }
+    }
+
+    fun clearUpdateDownload() {
+        preferences.edit { remove("update_download_version"); remove("update_download_id") }
     }
 }
 

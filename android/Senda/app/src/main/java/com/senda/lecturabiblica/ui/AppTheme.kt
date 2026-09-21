@@ -12,16 +12,17 @@ data class AccentPalette(val id: String, val name: String, val color: Color, val
 val accentPalettes = listOf(
     AccentPalette("bosque", "Bosque", Color(0xFF176B50), Color(0xFF8DDBB9)),
     AccentPalette("cielo", "Cielo", Color(0xFF0077B6), Color(0xFF71D2FF)),
+    AccentPalette("lumbre", "Lumbre", Color(0xFFC54800), Color(0xFFFFB68A)),
     AccentPalette("anil", "Añil", Color(0xFF3547A8), Color(0xFFBAC3FF)),
-    AccentPalette("violeta", "Violeta", Color(0xFF7153A7), Color(0xFFD4BBFF)),
     AccentPalette("mango", "Mango", Color(0xFF8A5900), Color(0xFFFFBA47)),
     AccentPalette("fucsia", "Fucsia", Color(0xFFA10069), Color(0xFFFFAFD7)),
 )
 
 @Composable
-fun SendaTheme(mode: String, accentId: String, content: @Composable () -> Unit) {
+fun SendaTheme(mode: String, accentId: String, fontSize: String, content: @Composable () -> Unit) {
     val dark = when (mode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
-    val accent = accentPalettes.firstOrNull { it.id == accentId } ?: accentPalettes.first()
+    val accent = accentPalettes.firstOrNull { it.id == accentId }
+        ?: accentPalettes.first { it.id == "cielo" }
     val darkAccentContainer = accent.color.copy(alpha = .52f).compositeOver(Color(0xFF27312B))
     val lightAccentContainer = accent.color.copy(alpha = .16f).compositeOver(Color(0xFFF7FAF7))
     val scheme = if (dark) {
@@ -75,7 +76,12 @@ fun SendaTheme(mode: String, accentId: String, content: @Composable () -> Unit) 
             errorContainer = Color(0xFFFFDAD6),
         )
     }
-    MaterialTheme(colorScheme = scheme, typography = sendaTypography, shapes = sendaShapes, content = content)
+    MaterialTheme(
+        colorScheme = scheme,
+        typography = sendaTypography(if (fontSize == "large") 1.2f else 1f),
+        shapes = sendaShapes,
+        content = content,
+    )
 }
 
 private fun Color.compositeOver(background: Color): Color {

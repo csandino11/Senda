@@ -21,13 +21,16 @@ carga diaria al ritmo elegido y guarda todo el progreso localmente en el disposi
 - Registro por capítulo y estados diarios: completo, parcial o no leído.
 - Marcado automático al abrir una lectura y confirmación antes de habilitarla otra vez.
 - Estadísticas precisas del avance del plan.
-- Seis paletas de énfasis y modos claro, oscuro o automático, integrados en Avanzado.
+- Seis paletas de énfasis, tamaño de letra Normal/Grande y modos claro, oscuro o
+  automático, integrados en Avanzado y configurables desde el primer inicio.
+- Fondos dinámicos opcionales con una ilustración optimizada para cada temática.
 - Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
 - Apertura prioritaria en YouVersion y alternativa a otra aplicación compatible.
 - TLAI obligatoria para las lecturas deuterocanónicas.
 - Respaldo comprimido del plan y el progreso en archivos `.senda`, restaurable en
   otra instalación o dispositivo.
-- Comprobación silenciosa y reintentable de nuevas versiones publicadas en GitHub.
+- Comprobación silenciosa y reintentable de nuevas versiones publicadas en GitHub,
+  descarga con progreso y acceso directo al instalador de Android.
 
 ## Instalación
 
@@ -115,6 +118,9 @@ publicación también se ejecutan lint, R8 y verificación de la firma del APK.
 
 ## Versiones
 
+- **1.7.0:** fondos dinámicos temáticos, tamaño de letra ampliable, personalización
+  desde el primer inicio, paleta Lumbre y descarga de actualizaciones con progreso,
+  reutilización del APK e instalación guiada.
 - **1.6.0:** apariencia integrada en Avanzado, paletas Cielo y Añil renovadas, estado
   Parcial amarillo y comprobación de actualizaciones resiliente con reintentos.
 - **1.5.0:** planes de duración variable desde el día de creación, ritmos Suave,

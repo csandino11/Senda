@@ -16,14 +16,14 @@ val sendaShapes = Shapes(
     extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(34.dp),
 )
 
-val sendaTypography = Typography(
-    displaySmall = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = 38.sp, lineHeight = 44.sp),
-    headlineLarge = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = 32.sp, lineHeight = 38.sp),
-    headlineMedium = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = 27.sp, lineHeight = 33.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 21.sp, lineHeight = 27.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp),
+fun sendaTypography(scale: Float) = Typography(
+    displaySmall = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = (38 * scale).sp, lineHeight = (44 * scale).sp),
+    headlineLarge = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = (32 * scale).sp, lineHeight = (38 * scale).sp),
+    headlineMedium = TextStyle(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium, fontSize = (27 * scale).sp, lineHeight = (33 * scale).sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = (21 * scale).sp, lineHeight = (27 * scale).sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = (16 * scale).sp, lineHeight = (22 * scale).sp),
+    bodyLarge = TextStyle(fontSize = (16 * scale).sp, lineHeight = (24 * scale).sp),
+    bodyMedium = TextStyle(fontSize = (14 * scale).sp, lineHeight = (21 * scale).sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = (14 * scale).sp, lineHeight = (20 * scale).sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp),
 )

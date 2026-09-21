@@ -11,6 +11,15 @@ import java.net.URL
 
 data class AppUpdate(val version: String, val downloadUrl: String)
 
+enum class UpdateDownloadStatus { DOWNLOADING, COMPLETE, FAILED, MISSING }
+
+data class UpdateDownloadProgress(
+    val status: UpdateDownloadStatus,
+    val percent: Int = 0,
+    val localUri: String? = null,
+    val message: String? = null,
+)
+
 class UpdateRepository(private val context: Context) {
     private val latestReleaseApi = "https://api.github.com/repos/csandino11/Senda/releases/latest"
     private val latestReleasePage = "https://github.com/csandino11/Senda/releases/latest"
@@ -62,6 +71,8 @@ class UpdateRepository(private val context: Context) {
         .versionName
         .orEmpty()
 
+    fun isNewerThanInstalled(version: String): Boolean = isNewerVersion(currentVersion(), version)
+
     fun enqueueDownload(update: AppUpdate): Long {
         require(isTrustedDownload(update.downloadUrl)) { "El enlace de descarga no es válido." }
         val request = DownloadManager.Request(update.downloadUrl.toUri())
@@ -73,6 +84,63 @@ class UpdateRepository(private val context: Context) {
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Senda-${update.version}.apk")
         val manager = context.getSystemService(DownloadManager::class.java)
         return manager.enqueue(request)
+    }
+
+    fun findExistingDownload(update: AppUpdate): Long? {
+        val manager = context.getSystemService(DownloadManager::class.java)
+        manager.query(DownloadManager.Query()).use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID)
+            val titleColumn = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TITLE)
+            val statusColumn = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+            val uriColumn = cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_URI)
+            var running: Long? = null
+            while (cursor.moveToNext()) {
+                if (cursor.getString(titleColumn) != "Senda ${update.version}" ||
+                    cursor.getString(uriColumn) != update.downloadUrl
+                ) continue
+                val id = cursor.getLong(idColumn)
+                when (cursor.getInt(statusColumn)) {
+                    DownloadManager.STATUS_SUCCESSFUL -> return id
+                    DownloadManager.STATUS_PENDING,
+                    DownloadManager.STATUS_RUNNING,
+                    DownloadManager.STATUS_PAUSED,
+                    -> if (running == null) running = id
+                }
+            }
+            return running
+        }
+    }
+
+    fun downloadProgress(id: Long): UpdateDownloadProgress {
+        val manager = context.getSystemService(DownloadManager::class.java)
+        manager.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
+            if (!cursor.moveToFirst()) return UpdateDownloadProgress(UpdateDownloadStatus.MISSING)
+            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            val downloaded = cursor.getLong(
+                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
+            )
+            val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            val percent = if (total > 0L) ((downloaded * 100L) / total).toInt().coerceIn(0, 100) else 0
+            return when (status) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    val uri = manager.getUriForDownloadedFile(id)?.toString()
+                    if (uri == null) {
+                        UpdateDownloadProgress(
+                            UpdateDownloadStatus.FAILED,
+                            message = "Android no pudo abrir el archivo descargado.",
+                        )
+                    } else {
+                        UpdateDownloadProgress(UpdateDownloadStatus.COMPLETE, 100, uri)
+                    }
+                }
+                DownloadManager.STATUS_FAILED -> UpdateDownloadProgress(
+                    UpdateDownloadStatus.FAILED,
+                    percent,
+                    message = "La descarga no pudo completarse. Comprueba la conexión y el espacio disponible.",
+                )
+                else -> UpdateDownloadProgress(UpdateDownloadStatus.DOWNLOADING, percent)
+            }
+        }
     }
 
 }

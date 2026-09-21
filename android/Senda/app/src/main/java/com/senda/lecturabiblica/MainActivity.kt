@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
-            SendaTheme(state.themeMode, state.accent) {
+            SendaTheme(state.themeMode, state.accent, state.fontSize) {
                 SendaApp(state, viewModel)
             }
         }

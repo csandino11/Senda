@@ -9,11 +9,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,6 +87,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -96,6 +100,8 @@ import androidx.compose.ui.unit.sp
 import com.senda.lecturabiblica.AppUiState
 import com.senda.lecturabiblica.AppViewModel
 import com.senda.lecturabiblica.R
+import com.senda.lecturabiblica.UpdateDownloadPhase
+import com.senda.lecturabiblica.UpdateDownloadUiState
 import com.senda.lecturabiblica.data.BibleData
 import com.senda.lecturabiblica.data.SENDA_BACKUP_MIME
 import com.senda.lecturabiblica.data.SavedPlanBackup
@@ -129,6 +135,43 @@ private enum class Destination(val label: String, val icon: Int) {
 @Composable
 fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val installerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        viewModel.markInstallationIncomplete()
+    }
+    val launchInstaller: (String) -> Unit = { uriText ->
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uriText.toUri(), "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            viewModel.markInstallerStarted()
+            installerLauncher.launch(intent)
+        }.onFailure {
+            viewModel.markInstallationIncomplete("Android no pudo abrir el instalador de la actualización.")
+        }
+    }
+    val installPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val uri = state.updateDownload?.localUri
+        if (context.packageManager.canRequestPackageInstalls()) {
+            if (uri != null) launchInstaller(uri)
+        } else {
+            viewModel.markInstallationIncomplete(
+                "Debes permitir que Senda instale aplicaciones desde esta fuente para continuar.",
+            )
+        }
+    }
+    val installUpdate = {
+        val uri = state.updateDownload?.localUri
+        if (uri == null) {
+            viewModel.markInstallationIncomplete("No se encontró el archivo APK descargado.")
+        } else if (!context.packageManager.canRequestPackageInstalls()) {
+            installPermissionLauncher.launch(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()),
+            )
+        } else {
+            launchInstaller(uri)
+        }
+    }
     val updatePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.downloadUpdate()
         else viewModel.showError("Se necesita permiso para guardar la actualización en Descargas.")
@@ -143,6 +186,11 @@ fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
         }
     }
     when {
+        state.updateDownload != null -> UpdateDownloadScreen(
+            state.updateDownload,
+            installUpdate,
+            viewModel::closeUpdateDownload,
+        )
         state.loading -> LoadingScreen()
         state.plan == null -> OnboardingScreen(state, viewModel)
         else -> Planner(state.plan, state, viewModel)
@@ -165,6 +213,112 @@ fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
             onIgnore = viewModel::ignoreUpdate,
             onLater = viewModel::postponeUpdate,
         )
+    }
+}
+
+@Composable
+private fun UpdateDownloadScreen(
+    update: UpdateDownloadUiState,
+    onInstall: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Scaffold { insets ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(insets),
+            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            item {
+                Text("SENDA", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, letterSpacing = 3.sp)
+                Spacer(Modifier.height(18.dp))
+                Text("Actualizando Senda", style = MaterialTheme.typography.headlineLarge)
+                Text(
+                    "Versión ${update.version}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+            when (update.phase) {
+                UpdateDownloadPhase.DOWNLOADING -> {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                            Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text("Descargando actualización", style = MaterialTheme.typography.titleLarge)
+                                LinearProgressIndicator(
+                                    progress = { update.progress / 100f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Text(
+                                    if (update.progress > 0) "${update.progress} %" else "Preparando descarga…",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+                UpdateDownloadPhase.READY -> {
+                    item { DownloadCompleteCard(onInstall) }
+                }
+                UpdateDownloadPhase.INSTALLING -> {
+                    item {
+                        Card {
+                            Row(Modifier.fillMaxWidth().padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                                Column(Modifier.padding(start = 16.dp)) {
+                                    Text("Abriendo el instalador…", style = MaterialTheme.typography.titleMedium)
+                                    Text("Sigue las indicaciones de Android para completar la actualización.")
+                                }
+                            }
+                        }
+                    }
+                }
+                UpdateDownloadPhase.FAILED -> {
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                            Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("No se pudo completar", style = MaterialTheme.typography.titleLarge)
+                                Text(update.message ?: "La actualización no finalizó correctamente.")
+                                if (update.localUri != null) {
+                                    Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Intentar instalar nuevamente")
+                                    }
+                                }
+                                OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Cerrar")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (update.phase == UpdateDownloadPhase.READY) {
+                item {
+                    TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Cerrar") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadCompleteCard(onInstall: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                Text("Descarga Completa", style = MaterialTheme.typography.titleLarge)
+                Text("El APK más reciente está listo para instalarse.")
+                Button(onClick = onInstall, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("Instalar") }
+            }
+        }
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Cómo completar la instalación", style = MaterialTheme.typography.titleMedium)
+                Text("1. Pulsa Instalar y permite instalaciones desde Senda si Android lo solicita.")
+                Text("2. Si Play Protect ofrece analizar la aplicación, permite el análisis; el APK está firmado y es seguro.")
+                Text("3. Confirma Instalar en la pantalla del sistema y luego abre Senda nuevamente.")
+            }
+        }
     }
 }
 
@@ -243,6 +397,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
     var paceId by rememberSaveable { mutableStateOf(ReadingPace.MODERATE.id) }
     var extra by rememberSaveable { mutableStateOf(true) }
     var bibleVersion by rememberSaveable { mutableStateOf(state.bibleVersion) }
+    var showPersonalization by rememberSaveable { mutableStateOf(false) }
     val restorePlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::requestRestore)
     }
@@ -281,6 +436,46 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                                 "• Dos recorridos de Evangelios y Salmos\n" +
                                 "• Cuatro recorridos de Proverbios",
                         )
+                    }
+                }
+            }
+            item {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .32f)),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showPersonalization = !showPersonalization
+                            }.padding(horizontal = 18.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Opciones de Personalización",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                if (showPersonalization) "Ocultar ︿" else "Mostrar ﹀",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                        AnimatedVisibility(showPersonalization) {
+                            Column(
+                                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(18.dp),
+                            ) {
+                                HorizontalDivider()
+                                AccentSelector(state.accent) { viewModel.setAppearance(accent = it) }
+                                FontSizeSelector(state.fontSize) { viewModel.setAppearance(fontSize = it) }
+                                DynamicBackgroundSelector(state.dynamicBackground) {
+                                    viewModel.setAppearance(dynamicBackground = it)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -407,38 +602,68 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
     var dateText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(initial.toString()) }
     val date = LocalDate.parse(dateText).coerceIn(plan.startDate, plan.endDate)
     val day = plan.days.first { it.date == date }
-    LazyColumn(
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
-    ) {
-        item {
-            DateHeading(
-                date = date,
-                dayNumber = plan.days.indexOf(day) + 1,
-                totalDays = plan.days.size,
-                onPrevious = { if (date > plan.days.first().date) dateText = date.minusDays(1).toString() },
-                onNext = { if (date < plan.days.last().date) dateText = date.plusDays(1).toString() },
+    Box(Modifier.fillMaxSize()) {
+        if (state.dynamicBackground) {
+            Image(
+                painter = painterResource(themeBackground(plan.theme)),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(
+                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = .78f)),
             )
         }
-        item {
-            val done = day.readings.indices.count { "$date#$it" in state.completed }
-            ProgressSummary(done, day.readings.size)
-        }
-        items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
-            ReadingCard(
-                day = day,
-                index = index,
-                complete = "$date#$index" in state.completed,
-                defaultVersion = state.bibleVersion,
-                onComplete = { viewModel.markReadingComplete(date, index) },
-                onReread = { viewModel.markReadingForReread(date, index) },
-            )
-        }
-        item {
-            Text(day.connection, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))
+        LazyColumn(
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize(),
+        ) {
+            item {
+                DateHeading(
+                    date = date,
+                    dayNumber = plan.days.indexOf(day) + 1,
+                    totalDays = plan.days.size,
+                    onPrevious = { if (date > plan.days.first().date) dateText = date.minusDays(1).toString() },
+                    onNext = { if (date < plan.days.last().date) dateText = date.plusDays(1).toString() },
+                )
+            }
+            item {
+                val done = day.readings.indices.count { "$date#$it" in state.completed }
+                ProgressSummary(done, day.readings.size)
+            }
+            items(day.readings.indices.toList(), key = { "$date-$it" }) { index ->
+                ReadingCard(
+                    day = day,
+                    index = index,
+                    complete = "$date#$index" in state.completed,
+                    defaultVersion = state.bibleVersion,
+                    onComplete = { viewModel.markReadingComplete(date, index) },
+                    onReread = { viewModel.markReadingForReread(date, index) },
+                )
+            }
+            item {
+                Text(
+                    day.connection,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
         }
     }
 }
+
+internal val themeBackgrounds = mapOf(
+    "faith" to R.drawable.theme_faith,
+    "love" to R.drawable.theme_love,
+    "hope" to R.drawable.theme_hope,
+    "prayer" to R.drawable.theme_prayer,
+    "wisdom" to R.drawable.theme_wisdom,
+    "justice" to R.drawable.theme_justice,
+    "forgiveness" to R.drawable.theme_forgiveness,
+)
+
+private fun themeBackground(theme: String): Int = themeBackgrounds[theme] ?: R.drawable.theme_faith
 
 @Composable
 private fun DateHeading(date: LocalDate, dayNumber: Int, totalDays: Int, onPrevious: () -> Unit, onNext: () -> Unit) {
@@ -884,41 +1109,105 @@ private fun AppearanceControls(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
         }
-        Column {
-            Text("Color de énfasis", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                accentPalettes.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { palette ->
-                            Surface(
-                                modifier = Modifier.weight(1f).clickable {
-                                    viewModel.setAppearance(accent = palette.id)
+        AccentSelector(state.accent) { viewModel.setAppearance(accent = it) }
+        FontSizeSelector(state.fontSize) { viewModel.setAppearance(fontSize = it) }
+        DynamicBackgroundSelector(state.dynamicBackground) {
+            viewModel.setAppearance(dynamicBackground = it)
+        }
+    }
+}
+
+@Composable
+private fun AccentSelector(selected: String, onSelect: (String) -> Unit) {
+    Column {
+        Text("Color de énfasis", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            accentPalettes.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { palette ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { onSelect(palette.id) },
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(
+                                if (selected == palette.id) 2.dp else 1.dp,
+                                if (selected == palette.id) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.outline.copy(alpha = .3f)
                                 },
-                                shape = RoundedCornerShape(18.dp),
-                                border = BorderStroke(
-                                    if (state.accent == palette.id) 2.dp else 1.dp,
-                                    if (state.accent == palette.id) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.outline.copy(alpha = .3f)
-                                    },
-                                ),
-                            ) {
-                                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(Modifier.size(30.dp).clip(CircleShape).background(palette.color))
-                                    Text(
-                                        palette.name,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        modifier = Modifier.padding(top = 7.dp),
-                                        maxLines = 1,
-                                    )
-                                }
+                            ),
+                        ) {
+                            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.size(30.dp).clip(CircleShape).background(palette.color))
+                                Text(
+                                    palette.name,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.padding(top = 7.dp),
+                                    maxLines = 1,
+                                )
                             }
                         }
                     }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FontSizeSelector(selected: String, onSelect: (String) -> Unit) {
+    Column {
+        Text("Tamaño de letra", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf("normal" to "Normal", "large" to "Grande").forEach { (id, label) ->
+                val active = selected == id
+                Surface(
+                    modifier = Modifier.weight(1f).clickable { onSelect(id) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        if (active) 2.dp else 1.dp,
+                        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .3f),
+                    ),
+                ) {
+                    Text(
+                        label,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                        textAlign = TextAlign.Center,
+                        style = if (id == "large") {
+                            MaterialTheme.typography.titleLarge
+                        } else {
+                            MaterialTheme.typography.titleMedium
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DynamicBackgroundSelector(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clickable { onChange(!enabled) }.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Fondo Dinámico", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Muestra en Día una imagen inspirada en la temática del plan.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onChange)
         }
     }
 }

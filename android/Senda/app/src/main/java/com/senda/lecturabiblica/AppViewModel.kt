@@ -11,6 +11,7 @@ import com.senda.lecturabiblica.data.PlanBackupFiles
 import com.senda.lecturabiblica.data.PlanStore
 import com.senda.lecturabiblica.data.SavedPlanBackup
 import com.senda.lecturabiblica.data.UpdateRepository
+import com.senda.lecturabiblica.data.UpdateDownloadStatus
 import com.senda.lecturabiblica.domain.PlanGenerator
 import com.senda.lecturabiblica.domain.bibleTranslations
 import com.senda.lecturabiblica.model.DayStatus
@@ -19,6 +20,7 @@ import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
 import com.senda.lecturabiblica.model.endDate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +37,9 @@ data class AppUiState(
     val generating: Boolean = false,
     val error: String? = null,
     val themeMode: String = "system",
-    val accent: String = "bosque",
+    val accent: String = "cielo",
+    val fontSize: String = "normal",
+    val dynamicBackground: Boolean = false,
     val bibleVersion: String = "RVC",
     val savingBackup: Boolean = false,
     val savedBackup: SavedPlanBackup? = null,
@@ -43,7 +47,19 @@ data class AppUiState(
     val restoringBackup: Boolean = false,
     val notice: String? = null,
     val availableUpdate: AppUpdate? = null,
+    val updateDownload: UpdateDownloadUiState? = null,
     val currentDate: LocalDate = LocalDate.now(),
+)
+
+enum class UpdateDownloadPhase { DOWNLOADING, READY, INSTALLING, FAILED }
+
+data class UpdateDownloadUiState(
+    val version: String,
+    val phase: UpdateDownloadPhase,
+    val progress: Int = 0,
+    val localUri: String? = null,
+    val message: String? = null,
+    val installStartedAt: Long? = null,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,11 +80,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 AppUiState(
                     plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(),
                     loading = false, themeMode = store.themeMode(), accent = store.accent(),
+                    fontSize = store.fontSize(), dynamicBackground = store.dynamicBackground(),
                     bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
                     pendingRestore = current.pendingRestore,
                     currentDate = today,
                 )
             }
+            restoreUpdateDownload()
             checkForUpdates()
         }
     }
@@ -144,9 +162,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return ProgressStats(read, plan.days.sumOf { it.readings.size }, completeDays, partialDays, unreadDays)
     }
 
-    fun setAppearance(mode: String = mutableState.value.themeMode, accent: String = mutableState.value.accent) {
-        store.saveAppearance(mode, accent)
-        mutableState.update { it.copy(themeMode = mode, accent = accent) }
+    fun setAppearance(
+        mode: String = mutableState.value.themeMode,
+        accent: String = mutableState.value.accent,
+        fontSize: String = mutableState.value.fontSize,
+        dynamicBackground: Boolean = mutableState.value.dynamicBackground,
+    ) {
+        if (fontSize !in setOf("normal", "large")) return
+        store.saveAppearance(mode, accent, fontSize, dynamicBackground)
+        mutableState.update {
+            it.copy(
+                themeMode = mode,
+                accent = accent,
+                fontSize = fontSize,
+                dynamicBackground = dynamicBackground,
+            )
+        }
     }
 
     fun setBibleVersion(version: String) {
@@ -234,6 +265,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val today = LocalDate.now()
         val snapshot = mutableState.value
         if (snapshot.loading) return
+        val installation = snapshot.updateDownload
+        if (installation?.phase == UpdateDownloadPhase.INSTALLING &&
+            System.currentTimeMillis() - (installation.installStartedAt ?: Long.MAX_VALUE) > 1_500L
+        ) {
+            markInstallationIncomplete()
+        }
         if (today == snapshot.currentDate) {
             viewModelScope.launch(Dispatchers.IO) { checkForUpdates() }
             return
@@ -264,22 +301,135 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadUpdate() {
         val update = mutableState.value.availableUpdate ?: return
-        runCatching { updates.enqueueDownload(update) }
-            .onSuccess {
-                store.snoozeUpdates(LocalDate.now().plusDays(1).toEpochDay())
-                mutableState.update {
-                    it.copy(
-                        availableUpdate = null,
-                        notice = "La actualización se está descargando en la carpeta Descargas.",
+        mutableState.update {
+            it.copy(
+                availableUpdate = null,
+                updateDownload = UpdateDownloadUiState(update.version, UpdateDownloadPhase.DOWNLOADING),
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val saved = store.savedUpdateDownload(update.version)
+                val existing = saved?.takeIf {
+                    updates.downloadProgress(it).status in setOf(
+                        UpdateDownloadStatus.DOWNLOADING,
+                        UpdateDownloadStatus.COMPLETE,
                     )
-                }
-            }
-            .onFailure { cause ->
+                } ?: updates.findExistingDownload(update)
+                val id = existing ?: updates.enqueueDownload(update)
+                store.saveUpdateDownload(update.version, id)
+                store.snoozeUpdates(LocalDate.now().plusDays(1).toEpochDay())
+                id
+            }.onSuccess { id ->
+                monitorUpdateDownload(update.version, id)
+            }.onFailure { cause ->
+                store.clearUpdateDownload()
                 mutableState.update {
-                    it.copy(error = cause.message ?: "No se pudo iniciar la descarga de la actualización.")
+                    it.copy(updateDownload = UpdateDownloadUiState(
+                        update.version,
+                        UpdateDownloadPhase.FAILED,
+                        message = cause.message ?: "No se pudo iniciar la descarga de la actualización.",
+                    ))
                 }
             }
+        }
     }
+
+    private suspend fun monitorUpdateDownload(version: String, id: Long) {
+        while (true) {
+            val progress = updates.downloadProgress(id)
+            when (progress.status) {
+                UpdateDownloadStatus.DOWNLOADING -> {
+                    mutableState.update {
+                        it.copy(updateDownload = UpdateDownloadUiState(
+                            version,
+                            UpdateDownloadPhase.DOWNLOADING,
+                            progress.percent,
+                        ))
+                    }
+                    delay(500)
+                }
+                UpdateDownloadStatus.COMPLETE -> {
+                    mutableState.update {
+                        it.copy(updateDownload = UpdateDownloadUiState(
+                            version,
+                            UpdateDownloadPhase.READY,
+                            100,
+                            progress.localUri,
+                        ))
+                    }
+                    return
+                }
+                UpdateDownloadStatus.FAILED,
+                UpdateDownloadStatus.MISSING,
+                -> {
+                    store.clearUpdateDownload()
+                    mutableState.update {
+                        it.copy(updateDownload = UpdateDownloadUiState(
+                            version,
+                            UpdateDownloadPhase.FAILED,
+                            progress.percent,
+                            message = progress.message ?: "No se encontró la descarga de la actualización.",
+                        ))
+                    }
+                    return
+                }
+            }
+        }
+    }
+
+    private fun restoreUpdateDownload() {
+        val (version, id) = store.savedUpdateDownload() ?: return
+        if (!updates.isNewerThanInstalled(version)) {
+            store.clearUpdateDownload()
+            return
+        }
+        val progress = updates.downloadProgress(id)
+        when (progress.status) {
+            UpdateDownloadStatus.DOWNLOADING -> {
+                mutableState.update {
+                    it.copy(updateDownload = UpdateDownloadUiState(
+                        version,
+                        UpdateDownloadPhase.DOWNLOADING,
+                        progress.percent,
+                    ))
+                }
+                viewModelScope.launch(Dispatchers.IO) { monitorUpdateDownload(version, id) }
+            }
+            UpdateDownloadStatus.COMPLETE -> mutableState.update {
+                it.copy(updateDownload = UpdateDownloadUiState(
+                    version,
+                    UpdateDownloadPhase.READY,
+                    100,
+                    progress.localUri,
+                ))
+            }
+            UpdateDownloadStatus.FAILED,
+            UpdateDownloadStatus.MISSING,
+            -> store.clearUpdateDownload()
+        }
+    }
+
+    fun markInstallerStarted() {
+        mutableState.update { state ->
+            state.copy(updateDownload = state.updateDownload?.copy(
+                phase = UpdateDownloadPhase.INSTALLING,
+                installStartedAt = System.currentTimeMillis(),
+            ))
+        }
+    }
+
+    fun markInstallationIncomplete(message: String = "La instalación no se completó. Puedes intentarlo nuevamente o cerrar esta pantalla.") {
+        mutableState.update { state ->
+            state.copy(updateDownload = state.updateDownload?.copy(
+                phase = UpdateDownloadPhase.FAILED,
+                message = message,
+                installStartedAt = null,
+            ))
+        }
+    }
+
+    fun closeUpdateDownload() = mutableState.update { it.copy(updateDownload = null) }
 
     fun showError(message: String) = mutableState.update { it.copy(error = message) }
 
