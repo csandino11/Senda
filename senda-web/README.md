@@ -15,7 +15,10 @@ plan es Senda Android 2.0.0, no `app/`, `lib/` ni la antigua API web del reposit
   deuterocanónicas fuerzan TLAI.
 - PDF local de los 45 días desde la descarga (o hasta el final del plan), en carta
   apaisada para letra Normal; legal apaisada, dos páginas, para Grande. Tres bloques
-  FECHA / LIBRO / CAP. y encabezado en el color de énfasis.
+  FECHA / LIBRO / CAP. y encabezado en el color de énfasis. Tras prepararlo, la app
+  ofrece descarga directa, vista previa y, si el navegador lo permite, compartirlo
+  o guardarlo mediante el diálogo nativo. Algunos navegadores integrados bloquean
+  las descargas; en ese caso se recomienda abrir la web en Safari o Chrome.
 - Respaldo `.senda` en el formato 1 Android: bytes `SENDA\x01` + GZIP de JSON
   `{format,plan,completed,bibleVersion}`. Importa planes y progreso de Android.
 - Sin registro: plan y progreso en el almacenamiento local del navegador. El respaldo

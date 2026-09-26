@@ -33,4 +33,4 @@ export function createPlanPdf(plan,from,large,accent){validatePlan(plan);const f
  return pdfBytes(objects);
 }
 function themesName(id){return ({faith:'Fe y confianza',love:'Amor y misericordia',hope:'Esperanza y promesas',prayer:'Oración y adoración',wisdom:'Sabiduría para vivir',justice:'Justicia y compasión',forgiveness:'Perdón y reconciliación'})[id]||id;}
-export function downloadPdf(plan,from,large,accent){const data=createPlanPdf(plan,from,large,accent);downloadBytes(data,`Senda-${from}-45-dias.pdf`,'application/pdf');}
+export function preparePdf(plan,from,large,accent){const data=createPlanPdf(plan,from,large,accent);return {data,url:URL.createObjectURL(new Blob([data],{type:'application/pdf'})),name:`Senda-${from}-45-dias.pdf`,days:plan.days.filter(day=>day.date>=from).slice(0,45).length};}
