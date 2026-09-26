@@ -51,8 +51,8 @@ carga diaria al ritmo elegido y guarda todo el progreso localmente en el disposi
 Senda requiere Android 8.0 (API 26) o posterior.
 Las dos ediciones tienen identificadores de paquete distintos y pueden coexistir.
 Un respaldo `.senda` permite trasladar el plan entre ellas.
-El archivo adicional `Senda-2.0.0.apk` es una copia idéntica de la edición YouVersion:
-conserva la ruta de descarga que utilizan las versiones anteriores al actualizarse.
+Los archivos adicionales `Senda-2.0.0.apk` y `Senda-2.0.0-Actualizacion.apk` son copias
+idénticas de YouVersion: conservan la ruta y selección de APK de los clientes antiguos.
 
 ## Traducciones de YouVersion
 

@@ -44,7 +44,8 @@ composición serena con espacio para la interfaz y sin texto, logos ni personas.
 
 ## Actualización de instalaciones anteriores
 
-Además de los dos APK identificados por edición, la publicación incluye `Senda-2.0.0.apk`,
-copia exacta de YouVersion. Se carga primero para que los clientes anteriores, que escogen
-el primer APK del release, conserven su paquete y firma. También mantiene la URL alternativa
-que esos clientes construyen cuando GitHub limita la consulta de su API.
+Además de los dos APK identificados por edición, la publicación incluye `Senda-2.0.0.apk`
+y `Senda-2.0.0-Actualizacion.apk`, copias exactas de YouVersion. GitHub ordenó los archivos
+por nombre, no por momento de carga: se verifica que Actualizacion sea el primer APK
+devuelto para los clientes anteriores que escogen el primer archivo. El nombre sin sufijo
+mantiene la URL alternativa que construyen cuando GitHub limita la consulta de su API.
