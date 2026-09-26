@@ -20,8 +20,10 @@ Para revisión local se puede agregar `?preview-platform=apple` o
 - Plan personal desde la fecha de creación: 1–4 capítulos entre semana y 1–3 en fines
   de semana, repeticiones configurables, temáticas, deuterocanónicos opcionales y
   exclusiones equivalentes a Android 2.0.0.
-- Día, calendario multianual, seguimiento por capítulo, estadísticas, paletas, tamaño
-  de letra, modo claro/oscuro y fondos temáticos renovables.
+- Día, calendario multianual con selección de varios días para completar lecturas
+  pendientes, seguimiento por capítulo, estadísticas, paletas, tamaño de letra,
+  modo claro/oscuro y fondos temáticos renovables. La navegación aparece cuando
+  hay un plan activo.
 - Traducciones YouVersion RVC, NTV, TLAI, PDT, NBV y Personalizado. Las lecturas
   deuterocanónicas fuerzan TLAI.
 - PDF local de los 45 días desde la descarga (o hasta el final del plan), en carta
