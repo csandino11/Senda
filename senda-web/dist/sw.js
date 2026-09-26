@@ -1,8 +1,8 @@
-const CACHE='senda-web-2026-09-26-3';
+const CACHE='senda-web-2026-09-26-4';
 const PDF_CACHE='senda-web-generated-pdf';
 const PDF_PATH='/__senda_plan.pdf';
 const SCENES=['faith','love','hope','prayer','wisdom','justice','forgiveness'].flatMap(theme=>['', '_alt', '_alt2'].map(suffix=>`/images/theme_${theme}${suffix}.webp`));
-const SHELL=['/','/index.html','/app.js','/plan.js','/catalog.js','/portable.js','/generator.worker.js','/styles.css','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png',...SCENES];
+const SHELL=['/','/index.html','/app.js','/plan.js','/catalog.js','/portable.js','/generator.worker.js','/styles.css','/platform.css','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png',...SCENES];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(names=>Promise.all(names.filter(n=>n!==CACHE&&n!==PDF_CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim())));
 self.addEventListener('message',event=>{if(event.data?.type!=='prepare-pdf')return;const file=String(event.data.name||'Senda-plan.pdf').replace(/[^A-Za-z0-9._-]/g,'_');const response=new Response(event.data.bytes,{headers:{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="${file}"`,'Cache-Control':'no-store'}});event.waitUntil(caches.open(PDF_CACHE).then(cache=>cache.put(PDF_PATH,response)).then(()=>event.ports[0]?.postMessage({ok:true}),()=>event.ports[0]?.postMessage({ok:false})));});

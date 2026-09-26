@@ -1,8 +1,19 @@
 # Senda web
 
-Nueva aplicación web instalable para iPhone, iPad, Mac y navegadores de escritorio.
+Una sola aplicación web instalable para iPhone, iPad, Mac y navegadores de escritorio.
 Es un proyecto independiente del prototipo web anterior. La fuente de las reglas del
 plan es Senda Android 2.0.0, no `app/`, `lib/` ni la antigua API web del repositorio.
+
+## Interfaz adaptable
+
+La misma URL, datos y funciones se presentan según el sistema operativo: navegación
+flotante y superficies de control inspiradas en Liquid Glass en iOS, iPadOS y macOS;
+capas, barra de comandos y geometría inspiradas en Fluent para Windows. Se adapta
+también al ancho de pantalla: barra inferior en iPhone, barra lateral en iPad/Mac/PC.
+Son interpretaciones CSS, no los materiales nativos del sistema, que una web no puede
+invocar directamente. Si no se detecta Apple o Windows se usa el estilo web neutro.
+Para revisión local se puede agregar `?preview-platform=apple` o
+`?preview-platform=windows`; este parámetro solo se atiende en localhost.
 
 ## Funciones
 

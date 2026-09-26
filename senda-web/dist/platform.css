@@ -1,0 +1,185 @@
+/* One product, two platform presentations. The web cannot use native Mica or
+   Liquid Glass APIs, so these are accessible CSS interpretations. */
+:root[data-platform="windows"] {
+  font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --canvas: #f1f4f8;
+  --paper: #fbfcfe;
+  --ink: #1c2632;
+  --muted: #596571;
+  --line: #d6dde6;
+  --shadow: 0 2px 9px rgba(29, 45, 68, .045);
+}
+:root[data-platform="windows"][data-mode="dark"] {
+  --canvas: #1b2028;
+  --paper: #292f38;
+  --ink: #f3f6fa;
+  --muted: #b5c0cc;
+  --line: #414954;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .11);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="windows"][data-mode="system"] {
+    --canvas: #1b2028;
+    --paper: #292f38;
+    --ink: #f3f6fa;
+    --muted: #b5c0cc;
+    --line: #414954;
+    --shadow: 0 2px 12px rgba(0, 0, 0, .11);
+  }
+}
+:root[data-platform="windows"] body {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, var(--canvas)), var(--canvas) 45%) fixed;
+}
+:root[data-platform="windows"] .app { max-width: none; grid-template-columns: 252px minmax(0, 1fr); }
+:root[data-platform="windows"] .rail {
+  background: color-mix(in srgb, var(--paper) 66%, transparent);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  padding: 1.8rem .9rem;
+}
+:root[data-platform="windows"] .brand { font-family: inherit; letter-spacing: -.025em; font-size: 1.35rem; padding-bottom: 2.1rem; }
+:root[data-platform="windows"] .brand-mark { border-radius: 7px; width: 2rem; height: 2rem; }
+:root[data-platform="windows"] .nav-button { position: relative; border-radius: 6px; padding: .66rem .85rem .66rem 1.15rem; font-weight: 600; }
+:root[data-platform="windows"] .nav-button.active { background: color-mix(in srgb, var(--accent) 10%, var(--paper)); color: var(--ink); }
+:root[data-platform="windows"] .nav-button.active::before { content: ""; position: absolute; width: 3px; height: 45%; left: .36rem; top: 27.5%; border-radius: 3px; background: var(--accent); }
+:root[data-platform="windows"] .nav-button.active svg { color: var(--accent); }
+:root[data-platform="windows"] .main { max-width: 1600px; width: 100%; margin-inline: auto; padding-top: 1.25rem; }
+:root[data-platform="windows"] .topline {
+  min-height: 3.1rem; padding: .35rem .75rem .35rem 1rem; margin-bottom: 1.55rem;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+}
+:root[data-platform="windows"] .eyebrow { letter-spacing: .09em; font-size: .72rem; }
+:root[data-platform="windows"] h1,
+:root[data-platform="windows"] h2 { letter-spacing: -.028em; }
+:root[data-platform="windows"] h1 { font-size: clamp(2rem, 3.2vw, 2.7rem); }
+:root[data-platform="windows"] .hero h1 { font-family: inherit; font-weight: 650; max-width: 17ch; }
+:root[data-platform="windows"] .card { border-radius: 11px; box-shadow: var(--shadow); }
+:root[data-platform="windows"] .hero { border-radius: 12px; min-height: 250px; }
+:root[data-platform="windows"] .reading { border-radius: 7px; transition: background-color .14s, border-color .14s; }
+:root[data-platform="windows"] .reading:hover { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+:root[data-platform="windows"] .button,
+:root[data-platform="windows"] .select,
+:root[data-platform="windows"] .input { border-radius: 6px; min-height: 2.55rem; }
+:root[data-platform="windows"] .button:hover:not(:disabled) { box-shadow: 0 1px 5px rgba(0, 0, 0, .12); }
+:root[data-platform="windows"] .dialog { border-radius: 10px; }
+:root[data-platform="windows"] .dialog-backdrop { background: rgba(14, 20, 29, .48); }
+:root[data-platform="windows"] .icon-button,
+:root[data-platform="windows"] .day-switch button { border-radius: 6px; }
+:root[data-platform="windows"] .cal-day,
+:root[data-platform="windows"] .color-choice,
+:root[data-platform="windows"] .stat,
+:root[data-platform="windows"] .notice { border-radius: 6px; }
+
+:root[data-platform="apple"] {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --canvas: #f5f5f7;
+  --paper: #fff;
+  --ink: #17212a;
+  --muted: #64717c;
+  --line: #e1e5e9;
+  --shadow: 0 14px 36px rgba(34, 42, 56, .055);
+}
+:root[data-platform="apple"][data-mode="dark"] {
+  --canvas: #111317;
+  --paper: #22262b;
+  --ink: #f4f5f7;
+  --muted: #bbc3cb;
+  --line: #3a4148;
+  --shadow: 0 15px 36px rgba(0, 0, 0, .16);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="apple"][data-mode="system"] {
+    --canvas: #111317;
+    --paper: #22262b;
+    --ink: #f4f5f7;
+    --muted: #bbc3cb;
+    --line: #3a4148;
+    --shadow: 0 15px 36px rgba(0, 0, 0, .16);
+  }
+}
+:root[data-platform="apple"] .app { grid-template-columns: 252px minmax(0, 1fr); gap: .3rem; }
+:root[data-platform="apple"] .rail {
+  margin: .8rem 0 .8rem .8rem; height: calc(100vh - 1.6rem);
+  border-radius: 22px; border: 1px solid color-mix(in srgb, var(--paper) 60%, var(--line));
+  background: color-mix(in srgb, var(--paper) 68%, transparent);
+  backdrop-filter: blur(30px) saturate(1.65);
+  -webkit-backdrop-filter: blur(30px) saturate(1.65);
+  box-shadow: 0 9px 34px rgba(32, 42, 52, .095), inset 0 1px rgba(255, 255, 255, .35);
+}
+:root[data-platform="apple"] .brand { font-family: inherit; letter-spacing: -.055em; }
+:root[data-platform="apple"] .brand-mark { border-radius: 13px; }
+:root[data-platform="apple"] .nav-button { border-radius: 11px; min-height: 44px; }
+:root[data-platform="apple"] .nav-button.active { background: color-mix(in srgb, var(--accent) 11%, var(--paper)); }
+:root[data-platform="apple"] .topline { margin-bottom: 2.1rem; }
+:root[data-platform="apple"] h1 { letter-spacing: -.045em; }
+:root[data-platform="apple"] .card { border-radius: 22px; box-shadow: var(--shadow); }
+:root[data-platform="apple"] .hero { border-radius: 26px; }
+:root[data-platform="apple"] .reading { border-radius: 15px; }
+:root[data-platform="apple"] .button { border-radius: 999px; min-height: 2.85rem; }
+:root[data-platform="apple"] .select,
+:root[data-platform="apple"] .input { border-radius: 13px; min-height: 2.85rem; }
+:root[data-platform="apple"] .icon-button,
+:root[data-platform="apple"] .day-switch button { min-width: 44px; min-height: 44px; }
+:root[data-platform="apple"] .dialog { border-radius: 22px; }
+:root[data-platform="apple"] .color-choice,
+:root[data-platform="apple"] .stat,
+:root[data-platform="apple"] .notice { border-radius: 14px; }
+
+@media (max-width: 1100px) {
+  :root[data-platform="apple"] .app,
+  :root[data-platform="windows"] .app { grid-template-columns: 210px minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  :root[data-platform="apple"] .app,
+  :root[data-platform="windows"] .app { display: block; }
+  :root[data-platform="apple"] .mobile-top {
+    position: sticky; top: 0; z-index: 15;
+    padding: calc(.65rem + env(safe-area-inset-top)) 1.2rem .65rem;
+    background: color-mix(in srgb, var(--paper) 67%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--paper) 55%, var(--line));
+    backdrop-filter: blur(26px) saturate(1.65);
+    -webkit-backdrop-filter: blur(26px) saturate(1.65);
+  }
+  :root[data-platform="apple"] .mobile-top .brand { padding: 0; }
+  :root[data-platform="apple"] .topline { display: none; }
+  :root[data-platform="apple"] .main { padding-top: .55rem; padding-bottom: calc(7.5rem + env(safe-area-inset-bottom)); }
+  :root[data-platform="apple"] .mobile-nav {
+    left: 1rem; right: 1rem; bottom: calc(.7rem + env(safe-area-inset-bottom));
+    width: auto; min-height: 4.5rem; padding: .4rem;
+    border: 1px solid color-mix(in srgb, var(--paper) 65%, var(--line));
+    border-radius: 1.55rem;
+    background: color-mix(in srgb, var(--paper) 64%, transparent);
+    backdrop-filter: blur(32px) saturate(1.7);
+    -webkit-backdrop-filter: blur(32px) saturate(1.7);
+    box-shadow: 0 10px 32px rgba(15, 25, 35, .17), inset 0 1px rgba(255, 255, 255, .38);
+  }
+  :root[data-platform="apple"] .mobile-nav button { min-height: 3.5rem; border-radius: 1.1rem; }
+  :root[data-platform="apple"] .mobile-nav button.active { background: color-mix(in srgb, var(--accent) 12%, var(--paper)); }
+  :root[data-platform="apple"] .dialog-backdrop { align-items: end; padding: 0; }
+  :root[data-platform="apple"] .dialog {
+    width: 100%; max-height: 85dvh; overflow: auto;
+    padding: 1.6rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    border-radius: 26px 26px 0 0;
+  }
+  :root[data-platform="windows"] .mobile-top { background: color-mix(in srgb, var(--paper) 78%, transparent); border-bottom: 1px solid var(--line); }
+  :root[data-platform="windows"] .mobile-nav { background: var(--paper); backdrop-filter: none; border-top: 1px solid var(--line); }
+  :root[data-platform="windows"] .mobile-nav button.active { background: color-mix(in srgb, var(--accent) 11%, var(--paper)); }
+  :root[data-platform="windows"] .topline { margin-bottom: 1.1rem; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform="apple"] .rail,
+  :root[data-platform="apple"] .mobile-top,
+  :root[data-platform="apple"] .mobile-nav,
+  :root[data-platform="windows"] .rail { background: var(--paper); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  :root[data-platform="windows"] body { background: Canvas; }
+  :root[data-platform="windows"] .rail,
+  :root[data-platform="apple"] .rail,
+  :root[data-platform="apple"] .mobile-nav { background: Canvas; border-color: CanvasText; box-shadow: none; }
+}
+:root[data-platform="apple"] :focus-visible,
+:root[data-platform="windows"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
