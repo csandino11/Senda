@@ -1,4 +1,4 @@
-const CACHE='senda-web-2026-09-26-6';
+const CACHE='senda-web-2026-09-26-7';
 const PDF_CACHE='senda-web-generated-pdf';
 const PDF_PATH='/__senda_plan.pdf';
 const SCENES=['faith','love','hope','prayer','wisdom','justice','forgiveness'].flatMap(theme=>['', '_alt', '_alt2'].map(suffix=>`/images/theme_${theme}${suffix}.webp`));

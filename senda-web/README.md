@@ -20,15 +20,15 @@ Para revisión local se puede agregar `?preview-platform=apple` o
 - Plan personal desde la fecha de creación: 1–4 capítulos entre semana y 1–3 en fines
   de semana, repeticiones configurables, temáticas, deuterocanónicos opcionales y
   exclusiones equivalentes a Android 2.0.0.
-- Día, calendario multianual con selección de varios días para completar lecturas
-  pendientes, seguimiento por capítulo, estadísticas, paletas, tamaño de letra,
-  modo claro/oscuro y fondos temáticos renovables. La navegación aparece cuando
-  hay un plan activo.
+- Día, calendario multianual con selección de días hasta la fecha actual para
+  registrar lecturas completas o parciales, seguimiento por capítulo, estadísticas,
+  paletas, tamaño de letra, modo claro/oscuro y fondos temáticos renovables. La
+  navegación aparece cuando hay un plan activo.
 - Traducciones YouVersion RVC, NTV, TLAI, PDT, NBV y Personalizado. Las lecturas
   deuterocanónicas fuerzan TLAI.
-- PDF local de los 45 días desde la descarga (o hasta el final del plan), en carta
-  apaisada para letra Normal; legal apaisada, dos páginas, para Grande. Tres bloques
-  FECHA / LIBRO / CAP. y encabezado en el color de énfasis. Tras prepararlo, la app
+- PDF local de los 40 días desde la descarga (o hasta el final del plan), en dos
+  páginas carta de hasta 20 días cada una, con cuerpo de 12 pt en Normal o 16 pt en Grande.
+  Sus tablas usan el color de énfasis y muestran fecha y lecturas. Tras prepararlo, la app
   ofrece descarga directa, vista previa y, si el navegador lo permite, compartirlo
   o guardarlo mediante el diálogo nativo. Algunos navegadores integrados bloquean
   las descargas; en ese caso se recomienda abrir la web en Safari o Chrome.

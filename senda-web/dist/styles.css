@@ -18,5 +18,6 @@
 .month-selection-bar .quiet{font-size:.9rem;margin-right:auto}
 .cal-day.picked{background:color-mix(in srgb,var(--accent) 16%,var(--paper));box-shadow:inset 0 0 0 2px var(--accent);font-weight:800}
 .cal-day.picked:before{content:"✓";position:absolute;top:.1rem;right:.25rem;color:var(--accent);font-size:.72rem;font-weight:900}
+.cal-day.future:disabled{opacity:.48}
 .app.no-plan .main{padding-bottom:2rem}
 @media(max-width:600px){.month-selection-bar .button{flex:1 1 auto}.month-selection-bar .quiet{width:100%;order:1}.month-selection-bar .button.primary{order:2;flex-basis:100%}}
