@@ -3,6 +3,7 @@ package com.senda.lecturabiblica.data
 import android.content.Context
 import androidx.core.content.edit
 import com.senda.lecturabiblica.model.DayPlan
+import com.senda.lecturabiblica.model.PlanPreferences
 import com.senda.lecturabiblica.model.Reading
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
@@ -77,6 +78,10 @@ class PlanStore(context: Context) {
     }
     fun fontSize(): String = preferences.getString("font_size", "normal") ?: "normal"
     fun dynamicBackground(): Boolean = preferences.getBoolean("dynamic_background", false)
+    fun backgroundVariant(): Int = preferences.getInt("background_variant", 0).coerceIn(0, 2)
+    fun saveBackgroundVariant(variant: Int) {
+        preferences.edit { putInt("background_variant", variant.coerceIn(0, 2)) }
+    }
     fun saveAppearance(mode: String, accent: String, fontSize: String, dynamicBackground: Boolean) {
         preferences.edit {
             putString("theme_mode", mode)
@@ -89,6 +94,11 @@ class PlanStore(context: Context) {
     fun bibleVersion(): String = preferences.getString("bible_version", "RVC") ?: "RVC"
     fun saveBibleVersion(version: String) {
         preferences.edit { putString("bible_version", version) }
+    }
+
+    fun preferredBibleApp(): String = preferences.getString("preferred_bible_app", "AUTO") ?: "AUTO"
+    fun savePreferredBibleApp(packageName: String) {
+        preferences.edit { putString("preferred_bible_app", packageName) }
     }
 
     fun shouldCheckForUpdate(day: Long): Boolean {
@@ -133,6 +143,13 @@ internal object PlanJson {
         put("version", plan.version); put("id", plan.id); put("year", plan.year); put("theme", plan.theme)
         put("includeDeuterocanon", plan.includeDeuterocanon); put("seed", plan.seed); put("createdAt", plan.createdAt)
         put("startDate", plan.startDate.toString()); put("pace", plan.pace.id)
+        plan.preferences?.let { settings -> put("preferences", JSONObject().apply {
+            put("weekdayChapters", settings.weekdayChapters)
+            put("weekendChapters", settings.weekendChapters)
+            put("repeatPsalms", settings.repeatPsalms)
+            put("proverbCycles", settings.proverbCycles)
+            put("repeatGospels", settings.repeatGospels)
+        }) }
         put("days", JSONArray().apply {
             plan.days.forEach { day -> put(JSONObject().apply {
                 put("date", day.date.toString()); put("focus", day.focus); put("connection", day.connection)
@@ -158,6 +175,13 @@ internal object PlanJson {
                 LocalDate.of(year, 1, 1)
             },
             pace = ReadingPace.fromId(if (json.has("pace")) json.getString("pace") else null),
+            preferences = json.optJSONObject("preferences")?.let { settings -> PlanPreferences(
+                weekdayChapters = settings.getInt("weekdayChapters"),
+                weekendChapters = settings.getInt("weekendChapters"),
+                repeatPsalms = settings.getBoolean("repeatPsalms"),
+                proverbCycles = settings.getInt("proverbCycles"),
+                repeatGospels = settings.getBoolean("repeatGospels"),
+            ) },
             days = json.getJSONArray("days").objects().map { day ->
                 DayPlan(
                     date = LocalDate.parse(day.getString("date")), focus = day.getString("focus"),

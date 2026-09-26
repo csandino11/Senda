@@ -4,6 +4,7 @@ import com.senda.lecturabiblica.data.BibleData
 import com.senda.lecturabiblica.data.Testament
 import com.senda.lecturabiblica.model.DayPlan
 import com.senda.lecturabiblica.model.Reading
+import com.senda.lecturabiblica.model.PlanPreferences
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
 import java.time.DayOfWeek
@@ -14,6 +15,17 @@ import kotlin.math.floor
 import kotlin.random.Random
 
 object PlanGenerator {
+    fun generate(
+        startDate: LocalDate,
+        theme: String,
+        includeDeuterocanon: Boolean,
+        preferences: PlanPreferences,
+        seed: Long = Random.nextLong(),
+    ): ReadingPlan = AdaptivePlanGenerator.generate(startDate, theme, includeDeuterocanon, preferences, seed)
+
+    fun estimateDays(startDate: LocalDate, includeDeuterocanon: Boolean, preferences: PlanPreferences): Int =
+        AdaptivePlanGenerator.estimateDays(startDate, includeDeuterocanon, preferences)
+
     fun generate(
         startDate: LocalDate,
         theme: String,
@@ -142,7 +154,11 @@ object PlanGenerator {
     }
 
     fun validate(plan: ReadingPlan): ValidationResult =
-        if (plan.version < 3 || plan.pace == ReadingPace.LEGACY) validateLegacy(plan) else validateFlexible(plan)
+        when {
+            plan.version >= 4 && plan.preferences != null -> AdaptivePlanGenerator.validate(plan)
+            plan.version < 3 || plan.pace == ReadingPace.LEGACY -> validateLegacy(plan)
+            else -> validateFlexible(plan)
+        }
 
     private fun validateFlexible(plan: ReadingPlan): ValidationResult {
         val errors = mutableListOf<String>()
@@ -408,7 +424,7 @@ object PlanGenerator {
         return pool.removeAt(index)
     }
 
-    private fun chronologicalGospels(gospels: List<Reading>): List<Reading> {
+    internal fun chronologicalGospels(gospels: List<Reading>): List<Reading> {
         val stage = mapOf(
             "MAT" to listOf(0,0,1,3,3,3,3,3,3,4,3,3,3,4,4,4,4,4,5,5,6,7,7,7,7,8,10,11),
             "MRK" to listOf(1,3,3,3,3,4,4,4,4,5,6,7,7,8,10,11),

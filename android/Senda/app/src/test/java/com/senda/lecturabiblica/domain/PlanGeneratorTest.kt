@@ -1,6 +1,7 @@
 package com.senda.lecturabiblica.domain
 
 import com.senda.lecturabiblica.data.BibleData
+import com.senda.lecturabiblica.BuildConfig
 import com.senda.lecturabiblica.data.PlanBackupCodec
 import com.senda.lecturabiblica.data.PlanBackupData
 import com.senda.lecturabiblica.data.PlanJson
@@ -150,8 +151,13 @@ class PlanGeneratorTest {
         val url = "https://github.com/csandino11/Senda/releases/download/v1.7.1/Senda-1.7.1.apk"
         val json = """{"tag_name":"v1.7.1","assets":[{"name":"Senda-1.7.1.apk","browser_download_url":"$url"}]}"""
 
-        assertEquals("1.7.1", updateFromReleaseJson("1.7.0", json)?.version)
-        assertEquals(url, updateFromReleaseLocation("1.7.0", "/csandino11/Senda/releases/tag/v1.7.1")?.downloadUrl)
+        if (BuildConfig.UNIVERSAL_BIBLE) {
+            assertEquals(null, updateFromReleaseJson("1.7.0", json))
+            assertEquals(null, updateFromReleaseLocation("1.7.0", "/csandino11/Senda/releases/tag/v1.7.1"))
+        } else {
+            assertEquals("1.7.1", updateFromReleaseJson("1.7.0", json)?.version)
+            assertEquals(url, updateFromReleaseLocation("1.7.0", "/csandino11/Senda/releases/tag/v1.7.1")?.downloadUrl)
+        }
         assertEquals(null, updateFromReleaseJson("1.7.1", json))
         assertEquals(null, updateFromReleaseLocation("1.7.1", "https://github.com/csandino11/Senda/releases/tag/v1.7.1"))
     }

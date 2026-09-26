@@ -19,13 +19,26 @@ android {
         applicationId = "com.senda.lecturabiblica"
         minSdk = 26
         targetSdk = 37
-        versionCode = 7
-        versionName = "1.7.1"
+        versionCode = 8
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
 
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+
+    flavorDimensions += "bibleProvider"
+    productFlavors {
+        create("youversion") {
+            dimension = "bibleProvider"
+            buildConfigField("boolean", "UNIVERSAL_BIBLE", "false")
+        }
+        create("universal") {
+            dimension = "bibleProvider"
+            applicationIdSuffix = ".universal"
+            buildConfigField("boolean", "UNIVERSAL_BIBLE", "true")
+        }
+    }
 
     signingConfigs {
         if (signingPropertiesFile.exists()) {

@@ -201,4 +201,15 @@ BEL|Daniel 14 · Bel y el dragón|Dn 14|1|faith wisdom|O|D
     )
 
     fun isLongChapter(book: String, chapter: Int): Boolean = "$book.$chapter" in longChapters
+
+    // Umbral de 60 versículos, contado por capítulo en el texto KJV público.
+    // Las tres adiciones largas siguen la numeración deuterocanónica utilizada aquí.
+    private val sixtyVerseChapters = setOf(
+        "GEN.24", "DEU.28", "1KI.8", "PSA.78", "PSA.119", "JER.51", "LAM.3",
+        "EZK.16", "MAT.26", "MAT.27", "MRK.14", "LUK.1", "LUK.9", "LUK.22",
+        "JHN.6", "ACT.7", "LJE.1", "S3Y.1", "SUS.1",
+    )
+
+    fun hasAtLeastSixtyVerses(book: String, chapter: Int): Boolean =
+        "$book.$chapter" in sixtyVerseChapters
 }

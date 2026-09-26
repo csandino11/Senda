@@ -20,6 +20,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -71,6 +74,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -102,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.senda.lecturabiblica.AppUiState
 import com.senda.lecturabiblica.AppViewModel
+import com.senda.lecturabiblica.BuildConfig
 import com.senda.lecturabiblica.R
 import com.senda.lecturabiblica.UpdateDownloadPhase
 import com.senda.lecturabiblica.UpdateDownloadUiState
@@ -109,10 +114,14 @@ import com.senda.lecturabiblica.data.BibleData
 import com.senda.lecturabiblica.data.SENDA_BACKUP_MIME
 import com.senda.lecturabiblica.data.SavedPlanBackup
 import com.senda.lecturabiblica.domain.bibleTranslations
+import com.senda.lecturabiblica.domain.PlanGenerator
 import com.senda.lecturabiblica.domain.youVersionUrl
+import com.senda.lecturabiblica.domain.openUniversalBible
+import com.senda.lecturabiblica.domain.installedUniversalBibleApps
 import com.senda.lecturabiblica.model.DayPlan
 import com.senda.lecturabiblica.model.DayStatus
 import com.senda.lecturabiblica.model.ProgressStats
+import com.senda.lecturabiblica.model.PlanPreferences
 import com.senda.lecturabiblica.model.Reading
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
@@ -123,6 +132,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val spanish = Locale.forLanguageTag("es-ES")
 private val longDate = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", spanish)
@@ -130,7 +140,6 @@ private val shortDate = DateTimeFormatter.ofPattern("d MMM", spanish)
 
 private enum class Destination(val label: String, val icon: Int) {
     DAY("Día", R.drawable.ic_nav_day),
-    WEEK("Semana", R.drawable.ic_nav_week),
     MONTH("Mes", R.drawable.ic_nav_month),
     ADVANCED("Avanzado", R.drawable.ic_nav_advanced),
 }
@@ -212,6 +221,7 @@ fun SendaApp(state: AppUiState, viewModel: AppViewModel) {
         state.notice != null -> NoticeDialog(state.notice, viewModel::dismissNotice)
         state.availableUpdate != null -> UpdateDialog(
             version = state.availableUpdate.version,
+            changelog = state.availableUpdate.changelog,
             onDownload = downloadUpdate,
             onIgnore = viewModel::ignoreUpdate,
             onLater = viewModel::postponeUpdate,
@@ -369,11 +379,21 @@ private fun NoticeDialog(message: String, onClose: () -> Unit) {
 }
 
 @Composable
-private fun UpdateDialog(version: String, onDownload: () -> Unit, onIgnore: () -> Unit, onLater: () -> Unit) {
+private fun UpdateDialog(version: String, changelog: List<String>, onDownload: () -> Unit, onIgnore: () -> Unit, onLater: () -> Unit) {
     AlertDialog(
         onDismissRequest = onLater,
         title = { Text("Nueva versión disponible") },
-        text = { Text("Hay una nueva actualización. ¿Desea descargar la versión más reciente de esta app?\n\nVersión $version") },
+        text = {
+            Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Hay una nueva actualización. ¿Desea descargar la versión más reciente de esta app?")
+                Text("Versión $version", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                if (changelog.isNotEmpty()) {
+                    Text("Novedades", style = MaterialTheme.typography.titleSmall)
+                    changelog.take(5).forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
         confirmButton = { Button(onClick = onDownload) { Text("Descargar") } },
         dismissButton = {
             Row {
@@ -397,7 +417,11 @@ private fun LoadingScreen() {
 @Composable
 private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable { mutableStateOf("faith") }
-    var paceId by rememberSaveable { mutableStateOf(ReadingPace.MODERATE.id) }
+    var weekdays by rememberSaveable { mutableStateOf(3) }
+    var weekends by rememberSaveable { mutableStateOf(2) }
+    var repeatPsalms by rememberSaveable { mutableStateOf(true) }
+    var proverbCycles by rememberSaveable { mutableStateOf(4) }
+    var repeatGospels by rememberSaveable { mutableStateOf(true) }
     var extra by rememberSaveable { mutableStateOf(true) }
     var bibleVersion by rememberSaveable { mutableStateOf(state.bibleVersion) }
     var showPersonalization by rememberSaveable { mutableStateOf(false) }
@@ -421,12 +445,14 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 )
             }
             item { ThemeSelector(theme, onSelect = { theme = it }) }
-            item { ReadingPaceSelector(paceId) { paceId = it } }
+            item { ChapterCountSelector("¿Cuántos capítulos deseas leer en días de semana?", weekdays, 1..4) { weekdays = it } }
+            item { ChapterCountSelector("¿Cuántos capítulos deseas leer en fin de semana?", weekends, 1..3) { weekends = it } }
+            item { RepetitionOptions(repeatPsalms, { repeatPsalms = it }, proverbCycles, { proverbCycles = it }, repeatGospels, { repeatGospels = it }) }
             item { DeuterocanonSwitch(extra, onChange = { extra = it }) }
             item { BibleVersionDropdown(bibleVersion, onSelect = { bibleVersion = it }) }
             item {
-                val pace = ReadingPace.fromId(paceId)
-                val days = pace.durationDays(extra)
+                val options = PlanPreferences(weekdays, weekends, repeatPsalms, proverbCycles, repeatGospels)
+                val days = PlanGenerator.estimateDays(state.currentDate, extra, options)
                 val finish = state.currentDate.plusDays(days.toLong() - 1)
                 val finishLabel = finish.format(shortDate).trimEnd('.') + "." +
                     if (finish.year > state.currentDate.year + 1) " (${finish.year})" else ""
@@ -435,9 +461,9 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                         Text("Un recorrido hecho para ti", style = MaterialTheme.typography.titleMedium)
                         Text(
                             "• Comienza hoy y finaliza aproximadamente el $finishLabel\n" +
-                                "• $days días al ritmo ${pace.label.lowercase()}\n" +
-                                "• Dos recorridos de Evangelios y Salmos\n" +
-                                "• Cuatro recorridos de Proverbios",
+                                "• Aproximadamente $days días; ${options.chaptersPerWeek} capítulos por semana\n" +
+                                "• Salmos: ${options.psalmCycles} vez/veces; Proverbios: ${options.proverbCycles} vez/veces\n" +
+                                "• Evangelios: ${options.gospelCycles} vez/veces",
                         )
                     }
                 }
@@ -486,7 +512,7 @@ private fun OnboardingScreen(state: AppUiState, viewModel: AppViewModel) {
                 Button(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     enabled = !state.generating,
-                    onClick = { viewModel.generate(theme, extra, ReadingPace.fromId(paceId), false, bibleVersion) },
+                    onClick = { viewModel.generate(theme, extra, PlanPreferences(weekdays, weekends, repeatPsalms, proverbCycles, repeatGospels), false, bibleVersion) },
                 ) {
                     if (state.generating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                     else Text("Crear mi plan ahora")
@@ -582,7 +608,7 @@ private fun PlannerContent(
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (dynamicDay) {
             Image(
-                painter = painterResource(themeBackground(plan.theme)),
+                painter = painterResource(themeBackground(plan.theme, state.backgroundVariant)),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -611,7 +637,8 @@ private fun PlannerContent(
                             style = MaterialTheme.typography.titleLarge,
                             color = if (dynamicDay) Color.White else MaterialTheme.colorScheme.onSurface,
                         )
-                        val rhythm = if (plan.pace == ReadingPace.LEGACY) "Plan anual" else plan.pace.label
+                    val rhythm = plan.preferences?.let { "${it.weekdayChapters} entre semana · ${it.weekendChapters} en fin de semana" }
+                        ?: if (plan.pace == ReadingPace.LEGACY) "Plan anual" else plan.pace.label
                         Text(
                             "$rhythm · ${BibleData.themes.first { it.id == plan.theme }.name}",
                             style = MaterialTheme.typography.labelMedium,
@@ -626,7 +653,6 @@ private fun PlannerContent(
             AnimatedContent(destination, modifier = Modifier.weight(1f), label = "pantalla") { screen ->
                 when (screen) {
                     Destination.DAY -> DayScreen(plan, state, viewModel)
-                    Destination.WEEK -> WeekScreen(plan, state, viewModel)
                     Destination.MONTH -> MonthScreen(plan, state, viewModel)
                     Destination.ADVANCED -> AdvancedScreen(plan, state, viewModel)
                 }
@@ -665,6 +691,7 @@ private fun DayScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewMo
                 index = index,
                 complete = "$date#$index" in state.completed,
                 defaultVersion = state.bibleVersion,
+                preferredBibleApp = state.preferredBibleApp,
                 dynamicBackground = state.dynamicBackground,
                 onComplete = { viewModel.markReadingComplete(date, index) },
                 onReread = { viewModel.markReadingForReread(date, index) },
@@ -704,7 +731,32 @@ internal val themeBackgrounds = mapOf(
     "forgiveness" to R.drawable.theme_forgiveness,
 )
 
-private fun themeBackground(theme: String): Int = themeBackgrounds[theme] ?: R.drawable.theme_faith
+private val alternateThemeBackgrounds = mapOf(
+    "faith" to R.drawable.theme_faith_alt,
+    "love" to R.drawable.theme_love_alt,
+    "hope" to R.drawable.theme_hope_alt,
+    "prayer" to R.drawable.theme_prayer_alt,
+    "wisdom" to R.drawable.theme_wisdom_alt,
+    "justice" to R.drawable.theme_justice_alt,
+    "forgiveness" to R.drawable.theme_forgiveness_alt,
+)
+
+private val secondAlternateThemeBackgrounds = mapOf(
+    "faith" to R.drawable.theme_faith_alt2,
+    "love" to R.drawable.theme_love_alt2,
+    "hope" to R.drawable.theme_hope_alt2,
+    "prayer" to R.drawable.theme_prayer_alt2,
+    "wisdom" to R.drawable.theme_wisdom_alt2,
+    "justice" to R.drawable.theme_justice_alt2,
+    "forgiveness" to R.drawable.theme_forgiveness_alt2,
+)
+
+private fun themeBackground(theme: String, variant: Int): Int =
+    (when (variant) {
+        1 -> alternateThemeBackgrounds
+        2 -> secondAlternateThemeBackgrounds
+        else -> themeBackgrounds
+    })[theme] ?: R.drawable.theme_faith
 
 @Composable
 private fun DateHeading(
@@ -767,6 +819,7 @@ private fun ReadingCard(
     index: Int,
     complete: Boolean,
     defaultVersion: String,
+    preferredBibleApp: String,
     dynamicBackground: Boolean,
     onComplete: () -> Unit,
     onReread: () -> Unit,
@@ -814,7 +867,7 @@ private fun ReadingCard(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(
                     enabled = !complete,
-                    onClick = { onComplete(); openBible(context, reading, defaultVersion) },
+                    onClick = { onComplete(); openBible(context, reading, defaultVersion, preferredBibleApp) },
                 ) {
                     Text("Leer ahora…"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(17.dp))
                 }
@@ -826,7 +879,7 @@ private fun ReadingCard(
         }
     }
     if (showVersions) VersionDialog(reading, onDismiss = { showVersions = false }) { version ->
-        showVersions = false; onComplete(); openBible(context, reading, version)
+        showVersions = false; onComplete(); openBible(context, reading, version, preferredBibleApp)
     }
     if (confirmReread) {
         AlertDialog(
@@ -854,7 +907,9 @@ private fun readingCaption(reading: Reading): String = when {
 
 @Composable
 private fun VersionDialog(reading: Reading, onDismiss: () -> Unit, onChoose: (String) -> Unit) {
-    val versions = bibleTranslations.filter { !reading.isDeuterocanonical || it.id == "TLAI" }
+    val versions = bibleTranslations.filter {
+        !reading.isDeuterocanonical || it.id == if (BuildConfig.UNIVERSAL_BIBLE) "DHH" else "TLAI"
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("¿En qué versión deseas leer esta lectura?") },
@@ -870,72 +925,6 @@ private fun VersionDialog(reading: Reading, onDismiss: () -> Unit, onChoose: (St
         },
         confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
-}
-
-@Composable
-private fun WeekScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
-    val today = state.currentDate.coerceIn(plan.startDate, plan.endDate)
-    var anchorText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(today.toString()) }
-    var selectedText by rememberSaveable(plan.id, state.currentDate.toString()) { mutableStateOf(today.toString()) }
-    val anchor = LocalDate.parse(anchorText)
-    val monday = anchor.minusDays((anchor.dayOfWeek.value - 1).toLong())
-    val available = (0L..6L).map { monday.plusDays(it) }.filter { it in plan.startDate..plan.endDate }
-    val selected = LocalDate.parse(selectedText).takeIf { it in available } ?: available.first()
-    val day = plan.days.first { it.date == selected }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Esta semana", style = MaterialTheme.typography.headlineMedium)
-                    Text("${monday.format(shortDate)} — ${monday.plusDays(6).format(shortDate)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = {
-                    val prior = anchor.minusWeeks(1)
-                    if (prior.plusDays(6) >= plan.startDate) anchorText = prior.coerceAtLeast(plan.startDate).toString()
-                }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Semana anterior") }
-                IconButton(onClick = {
-                    val next = anchor.plusWeeks(1)
-                    if (next.minusDays(6) <= plan.endDate) anchorText = next.coerceAtMost(plan.endDate).toString()
-                }) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Semana siguiente") }
-            }
-        }
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-                items(available) { date ->
-                    val status = viewModel.dayStatus(date)
-                    val selectedDay = date == selected
-                    Surface(
-                        modifier = Modifier.width(66.dp).clickable { selectedText = date.toString() },
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (selectedDay) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, if (selectedDay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
-                    ) {
-                        Column(Modifier.padding(vertical = 13.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(date.dayOfWeek.getDisplayName(TextStyle.SHORT, spanish).uppercase(spanish), style = MaterialTheme.typography.labelMedium)
-                            Text("${date.dayOfMonth}", style = MaterialTheme.typography.titleLarge)
-                            StatusDot(status)
-                        }
-                    }
-                }
-            }
-        }
-        item { Text(selected.format(longDate).replaceFirstChar { it.uppercase(spanish) }, style = MaterialTheme.typography.titleLarge) }
-        items(day.readings.indices.toList()) { index ->
-            ReadingCard(
-                day = day,
-                index = index,
-                complete = "$selected#$index" in state.completed,
-                defaultVersion = state.bibleVersion,
-                dynamicBackground = false,
-                onComplete = { viewModel.markReadingComplete(selected, index) },
-                onReread = { viewModel.markReadingForReread(selected, index) },
-            )
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
 }
 
 @Composable
@@ -1095,9 +1084,11 @@ private fun CalendarLegend() {
 @Composable
 private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppViewModel) {
     var theme by rememberSaveable(plan.id) { mutableStateOf(plan.theme) }
-    var paceId by rememberSaveable(plan.id) {
-        mutableStateOf(plan.pace.takeIf { it in ReadingPace.selectable }?.id ?: ReadingPace.MODERATE.id)
-    }
+    var weekdays by rememberSaveable(plan.id) { mutableStateOf(plan.preferences?.weekdayChapters ?: 3) }
+    var weekends by rememberSaveable(plan.id) { mutableStateOf(plan.preferences?.weekendChapters ?: 2) }
+    var repeatPsalms by rememberSaveable(plan.id) { mutableStateOf(plan.preferences?.repeatPsalms ?: true) }
+    var proverbCycles by rememberSaveable(plan.id) { mutableStateOf(plan.preferences?.proverbCycles ?: 4) }
+    var repeatGospels by rememberSaveable(plan.id) { mutableStateOf(plan.preferences?.repeatGospels ?: true) }
     var extra by rememberSaveable(plan.id) { mutableStateOf(plan.includeDeuterocanon) }
     var confirm by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1129,9 +1120,14 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
         item { AppearanceControls(state, viewModel) }
         item { HorizontalDivider() }
         item { ThemeDropdown(theme) { theme = it } }
-        item { ReadingPaceSelector(paceId) { paceId = it } }
+        item { ChapterCountSelector("¿Cuántos capítulos deseas leer en días de semana?", weekdays, 1..4) { weekdays = it } }
+        item { ChapterCountSelector("¿Cuántos capítulos deseas leer en fin de semana?", weekends, 1..3) { weekends = it } }
+        item { RepetitionOptions(repeatPsalms, { repeatPsalms = it }, proverbCycles, { proverbCycles = it }, repeatGospels, { repeatGospels = it }) }
         item { DeuterocanonSwitch(extra) { extra = it } }
         item { BibleVersionDropdown(state.bibleVersion, viewModel::setBibleVersion) }
+        if (BuildConfig.UNIVERSAL_BIBLE) {
+            item { UniversalBibleAppSelector(state.preferredBibleApp, viewModel::setPreferredBibleApp) }
+        }
         item {
             Button(
                 onClick = { confirm = true }, enabled = !state.generating,
@@ -1153,6 +1149,18 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
         }
         item { HorizontalDivider() }
         item { Statistics(stats) }
+        item { HorizontalDivider() }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Acerca de", style = MaterialTheme.typography.titleLarge)
+                Text("Senda ${BuildConfig.VERSION_NAME} · desarrollada por jucenm")
+                Text(if (BuildConfig.UNIVERSAL_BIBLE) "Edición Biblia universal" else "Edición YouVersion",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton(onClick = viewModel::checkForUpdatesNow, enabled = !state.checkingUpdates) {
+                    Text(if (state.checkingUpdates) "Buscando…" else "Buscar actualizaciones")
+                }
+            }
+        }
         item { Spacer(Modifier.height(18.dp)) }
     }
     if (confirm) {
@@ -1163,7 +1171,7 @@ private fun AdvancedScreen(plan: ReadingPlan, state: AppUiState, viewModel: AppV
             confirmButton = {
                 Button(onClick = {
                     confirm = false
-                    viewModel.generate(theme, extra, ReadingPace.fromId(paceId), true, state.bibleVersion)
+                    viewModel.generate(theme, extra, PlanPreferences(weekdays, weekends, repeatPsalms, proverbCycles, repeatGospels), true, state.bibleVersion)
                 }) { Text("Sí, generar") }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancelar") } },
@@ -1189,9 +1197,45 @@ private fun AppearanceControls(state: AppUiState, viewModel: AppViewModel) {
             }
         }
         AccentSelector(state.accent) { viewModel.setAppearance(accent = it) }
+        LauncherIconSelector(state.accent) { viewModel.setAppearance(accent = it) }
         FontSizeSelector(state.fontSize) { viewModel.setAppearance(fontSize = it) }
         DynamicBackgroundSelector(state.dynamicBackground) {
             viewModel.setAppearance(dynamicBackground = it)
+        }
+        if (state.dynamicBackground) {
+            OutlinedButton(onClick = viewModel::renewBackground, modifier = Modifier.fillMaxWidth()) {
+                Text("Renovar imagen de la temática")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LauncherIconSelector(selected: String, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Icono de la app", style = MaterialTheme.typography.titleMedium)
+        Text("El icono y el color de énfasis usan la misma paleta.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        accentPalettes.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { palette ->
+                    Surface(
+                        modifier = Modifier.weight(1f).clickable { onSelect(palette.id) },
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(if (selected == palette.id) 2.dp else 1.dp,
+                            if (selected == palette.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .3f)),
+                    ) {
+                        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(50.dp).clip(RoundedCornerShape(14.dp)).background(palette.color),
+                                contentAlignment = Alignment.Center) {
+                                Icon(painterResource(R.drawable.ic_launcher_foreground), null,
+                                    modifier = Modifier.size(50.dp), tint = Color.Unspecified)
+                            }
+                            Text(palette.name, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1324,54 +1368,64 @@ private fun ThemeSelector(selected: String, onSelect: (String) -> Unit) {
 }
 
 @Composable
-private fun ReadingPaceSelector(selected: String, onSelect: (String) -> Unit) {
-    var information by remember { mutableStateOf<ReadingPace?>(null) }
+private fun ChapterCountSelector(title: String, selected: Int, range: IntRange, onSelect: (Int) -> Unit) {
     Column {
-        Text("Adapte su ritmo de lectura", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Elige que tanto deseas leer, de acuerdo al tiempo que tienes para leer cada día",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            ReadingPace.selectable.forEach { pace ->
-                val isSelected = selected == pace.id
-                Surface(
-                    modifier = Modifier.fillMaxWidth().clickable { onSelect(pace.id) },
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        if (isSelected) 2.dp else 1.dp,
-                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .3f),
-                    ),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 18.dp, top = 10.dp, end = 8.dp, bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(pace.label, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Máximo ${pace.weekdayMaximum * 5 + pace.weekendMaximum * 2} capítulos semanales",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { information = pace }) {
-                            Icon(Icons.Default.Info, "Información sobre el ritmo ${pace.label}")
-                        }
-                    }
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Slider(
+                value = selected.toFloat(),
+                onValueChange = { onSelect(it.roundToInt().coerceIn(range)) },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                steps = range.last - range.first - 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text("$selected", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 12.dp))
+        }
+    }
+}
+
+@Composable
+private fun RepetitionOptions(
+    psalms: Boolean, onPsalms: (Boolean) -> Unit,
+    proverbs: Int, onProverbs: (Int) -> Unit,
+    gospels: Boolean, onGospels: (Boolean) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Repeticiones del recorrido", style = MaterialTheme.typography.titleLarge)
+        RepeatSwitch("¿Deseas repetir Salmos?", "Sí: 2 veces", psalms, onPsalms)
+        RepeatSwitch("¿Deseas repetir Proverbios?", "Sí: elige entre 2 y 4 veces", proverbs > 1) {
+            onProverbs(if (it) 2 else 1)
+        }
+        if (proverbs > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Veces", modifier = Modifier.padding(end = 12.dp))
+                listOf(2, 3, 4).forEach { count ->
+                    FilterChip(
+                        selected = proverbs == count,
+                        onClick = { onProverbs(count) },
+                        label = { Text("$count") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
                 }
             }
         }
+        RepeatSwitch("¿Deseas repetir los Evangelios?", "Sí: 2 veces", gospels, onGospels)
     }
-    information?.let { pace ->
-        AlertDialog(
-            onDismissRequest = { information = null },
-            title = { Text(pace.label) },
-            text = { Text(pace.information) },
-            confirmButton = { TextButton(onClick = { information = null }) { Text("Entendido") } },
-        )
+}
+
+@Composable
+private fun RepeatSwitch(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(
+            Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = checked, onCheckedChange = onChange)
+        }
     }
 }
 
@@ -1418,7 +1472,8 @@ private fun BibleVersionDropdown(selected: String, onSelect: (String) -> Unit) {
     Column {
         Text("Versión predeterminada para leer", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Los libros deuterocanónicos siempre se abrirán en TLAI.",
+            if (BuildConfig.UNIVERSAL_BIBLE) "Los libros deuterocanónicos se intentarán abrir en DHH; la disponibilidad depende de la app bíblica."
+                else "Los libros deuterocanónicos siempre se abrirán en TLAI.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -1433,6 +1488,33 @@ private fun BibleVersionDropdown(selected: String, onSelect: (String) -> Unit) {
                         text = { Text("${version.id}  ·  ${version.name}") },
                         onClick = { onSelect(version.id); expanded = false },
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UniversalBibleAppSelector(selected: String, onSelect: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val installed = remember { installedUniversalBibleApps(context) }
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = installed.firstOrNull { it.packageName == selected }?.name ?: "Automático"
+    Column {
+        Text("Aplicación bíblica preferida", style = MaterialTheme.typography.titleMedium)
+        Text("Los enlaces directos dependen de cada app. Si no los admite, Senda copiará la cita y abrirá la app.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(selectedName, modifier = Modifier.fillMaxWidth())
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(text = { Text("Automático") }, onClick = { onSelect("AUTO"); expanded = false })
+                installed.forEach { app ->
+                    DropdownMenuItem(text = { Text(app.name) }, onClick = {
+                        onSelect(app.packageName); expanded = false
+                    })
                 }
             }
         }
@@ -1483,12 +1565,19 @@ private fun StatCard(
     }
 }
 
-private fun openBible(context: Context, reading: Reading, version: String) {
+private fun openBible(context: Context, reading: Reading, version: String, preferredBibleApp: String) {
+    if (BuildConfig.UNIVERSAL_BIBLE) {
+        openUniversalBible(context, reading, version, preferredBibleApp)
+        return
+    }
     val uri = youVersionUrl(reading, version).toUri()
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("com.sirma.mobile.bible.android"))
     } catch (_: ActivityNotFoundException) {
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        val fallback = if (uri.scheme == "youversion")
+            youVersionUrl(reading, "RVC").toUri() else uri
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, fallback)) }
+            .onFailure { android.widget.Toast.makeText(context, "No se pudo abrir esta lectura.", android.widget.Toast.LENGTH_LONG).show() }
     }
 }
 

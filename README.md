@@ -9,37 +9,50 @@ carga diaria al ritmo elegido y guarda todo el progreso localmente en el disposi
 ## Características
 
 - Plan completo desde el día de creación hasta su fecha estimada de finalización.
-- Tres ritmos: Suave (520/558 días), Moderado (380/408 días) e Intensivo (300/322
-  días), según se excluyan o incluyan deuterocanónicos.
+- Selector de 1 a 4 capítulos entre semana y de 1 a 3 en fin de semana. La duración
+  se calcula según la combinación elegida y el canon seleccionado.
 - Distribución equilibrada de Antiguo Testamento, Nuevo Testamento y Evangelios.
-- Dos ciclos exactos de Evangelios y Salmos, y cuatro ciclos de Proverbios.
+- Repeticiones opcionales: Salmos y Evangelios una o dos veces; Proverbios de una a
+  cuatro veces.
 - Segundo ciclo de Evangelios ordenado cronológicamente.
-- Capítulos especialmente extensos priorizados para fines de semana.
+- Como máximo un capítulo de 60 o más versículos por semana; cuando el día admite
+  tres o cuatro capítulos, esa lectura reduce excepcionalmente la carga a dos.
 - Siete temáticas para dar énfasis y relacionar las lecturas diarias.
 - Deuterocanónicos opcionales y exclusiones específicas del programa de lectura.
-- Vistas de día, semana y calendario mensual.
+- Vistas de día y calendario mensual.
 - Registro por capítulo y estados diarios: completo, parcial o no leído.
 - Marcado automático al abrir una lectura y confirmación antes de habilitarla otra vez.
 - Estadísticas precisas del avance del plan.
 - Seis paletas de énfasis, tamaño de letra Normal/Grande y modos claro, oscuro o
   automático, integrados en Avanzado y configurables desde el primer inicio.
-- Fondos dinámicos opcionales con una ilustración optimizada para cada temática.
-- Traducción predeterminada configurable: RVC, NTV, TLAI, PDT o NBV.
-- Apertura prioritaria en YouVersion y alternativa a otra aplicación compatible.
-- TLAI obligatoria para las lecturas deuterocanónicas.
+- Fondos dinámicos opcionales con tres imágenes WebP optimizadas por temática y opción
+  para renovar la imagen sin red ni procesamiento intensivo en el dispositivo.
+- Seis variantes del icono de inicio, coordinadas con las paletas de énfasis.
+- Dos APK: edición YouVersion (RVC, NTV, TLAI, PDT, NBV y opción Personalizado) y
+  edición Biblia universal (RVC/RVA, NVI, DHH, RVR1960 y Personalizado).
+- En la edición YouVersion, TLAI es obligatoria para las lecturas deuterocanónicas.
+- En la edición universal, se detectan diez aplicaciones bíblicas. Bible Gateway y
+  Logos tienen rutas de pasaje; donde una app no publica un enlace compatible, Senda
+  la abre y copia la referencia para buscarla. No se puede garantizar que toda app
+  de terceros abra directamente un capítulo o tenga una traducción concreta.
 - Respaldo comprimido del plan y el progreso en archivos `.senda`, restaurable en
   otra instalación o dispositivo.
 - Comprobación silenciosa y reintentable de nuevas versiones publicadas en GitHub,
-  descarga con progreso y acceso directo al instalador de Android.
+  changelog, búsqueda manual, descarga con progreso y acceso al instalador de Android.
 
 ## Instalación
 
 1. Abre la sección [Releases](https://github.com/csandino11/Senda/releases).
-2. Descarga el APK de la versión deseada.
+2. Descarga **Senda-2.0.0-YouVersion.apk** si usas YouVersion o
+   **Senda-2.0.0-Universal.apk** si prefieres otra app bíblica.
 3. En Android, autoriza la instalación desde esa fuente cuando el sistema lo solicite.
 4. Abre Senda y crea tu plan personal.
 
 Senda requiere Android 8.0 (API 26) o posterior.
+Las dos ediciones tienen identificadores de paquete distintos y pueden coexistir.
+Un respaldo `.senda` permite trasladar el plan entre ellas.
+El archivo adicional `Senda-2.0.0.apk` es una copia idéntica de la edición YouVersion:
+conserva la ruta de descarga que utilizan las versiones anteriores al actualizarse.
 
 ## Traducciones de YouVersion
 
@@ -51,8 +64,20 @@ Senda requiere Android 8.0 (API 26) o posterior.
 | PDT | Palabra de Dios para Todos | 197 |
 | NBV | Nueva Biblia Viva | 753 |
 
-La aplicación no incluye ni redistribuye el texto de estas traducciones. Solamente abre
-el capítulo correspondiente mediante enlaces de YouVersion.
+La aplicación no incluye ni redistribuye el texto de estas traducciones. Solamente
+abre o busca el capítulo en un lector externo. La opción Personalizado de YouVersion
+usa un enlace sin código de traducción; depende de la compatibilidad de la versión
+instalada de esa app.
+
+## Edición Biblia universal
+
+Se detectan Bible Gateway, Logos Bible, Olive Tree Bible, Blue Letter Bible, Bible.is,
+AndBible, Santa Biblia Reina Valera, Biblia Católica, La Santa Biblia Católica y
+e-Sword. Senda intenta un enlace de pasaje en Bible Gateway o Logos. En los lectores
+que no publican una ruta Android verificable, abre la app y copia la cita. La
+disponibilidad de RVC/RVA, NVI, DHH, RVR1960 y los deuterocanónicos depende del
+lector; DHH de Bible Gateway incluye libros deuterocanónicos. No se promete acceso
+directo a un capítulo en una app que no ofrece integración pública.
 
 ## Tecnología
 
@@ -91,9 +116,9 @@ En Windows:
 
 ```powershell
 cd android/Senda
-.\gradlew.bat testDebugUnitTest
-.\gradlew.bat assembleRelease
-.\gradlew.bat lintRelease
+.\gradlew.bat testYouversionDebugUnitTest testUniversalDebugUnitTest
+.\gradlew.bat assembleYouversionRelease assembleUniversalRelease
+.\gradlew.bat lintYouversionRelease lintUniversalRelease
 ```
 
 Sin una configuración privada de firma, Gradle produce una versión release sin firmar.
@@ -111,13 +136,15 @@ Nunca deben incorporarse al repositorio.
 
 ## Verificación
 
-La suite automatizada valida las siete temáticas, los tres ritmos, ambos cánones, todos
-los días posibles de inicio semanal, límites diarios, exclusiones, ciclos, cobertura,
-orden cronológico, respaldos, descubrimiento de actualizaciones y enlaces de las cinco traducciones. Antes de cada
-publicación también se ejecutan lint, R8 y verificación de la firma del APK.
+La suite automatizada valida la generación adaptativa, ambos cánones, límites diarios,
+exclusiones, ciclos, cobertura, orden cronológico, respaldos y selección del APK
+correspondiente en las actualizaciones. Antes de publicar se ejecutan lint, R8 y
+verificación de la firma de ambos APK.
 
 ## Versiones
 
+- **2.0.0:** capítulos diarios elegibles, repeticiones configurables, dos ediciones
+  Android, iconos alternativos, fondos renovables, Acerca de y novedades de versión.
 - **1.7.1:** integración visual renovada de los fondos temáticos en la vista Día,
   con contraste adaptado para los modos claro y oscuro.
 - **1.7.0:** fondos dinámicos temáticos, tamaño de letra ampliable, personalización

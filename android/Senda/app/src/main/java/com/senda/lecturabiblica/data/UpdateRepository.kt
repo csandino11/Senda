@@ -4,12 +4,13 @@ import android.app.DownloadManager
 import android.content.Context
 import android.os.Environment
 import androidx.core.net.toUri
+import com.senda.lecturabiblica.BuildConfig
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
-data class AppUpdate(val version: String, val downloadUrl: String)
+data class AppUpdate(val version: String, val downloadUrl: String, val changelog: List<String> = emptyList())
 
 enum class UpdateDownloadStatus { DOWNLOADING, COMPLETE, FAILED, MISSING }
 
@@ -81,7 +82,7 @@ class UpdateRepository(private val context: Context) {
             .setMimeType("application/vnd.android.package-archive")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setAllowedOverMetered(true)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Senda-${update.version}.apk")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, releaseApkName(update.version))
         val manager = context.getSystemService(DownloadManager::class.java)
         return manager.enqueue(request)
     }
@@ -150,13 +151,20 @@ internal fun updateFromReleaseJson(currentVersion: String, body: String): AppUpd
     val latestVersion = json.getString("tag_name").removePrefix("v")
     if (!isNewerVersion(currentVersion, latestVersion)) return null
     val assets = json.getJSONArray("assets")
-    val downloadUrl = (0 until assets.length())
-        .map(assets::getJSONObject)
-        .firstOrNull { it.getString("name").endsWith(".apk", ignoreCase = true) }
+    val apkName = releaseApkName(latestVersion)
+    val releaseAssets = (0 until assets.length()).map(assets::getJSONObject)
+    val downloadUrl = (releaseAssets.firstOrNull { it.getString("name") == apkName }
+        ?: releaseAssets.singleOrNull { !BuildConfig.UNIVERSAL_BIBLE && it.getString("name") == "Senda-$latestVersion.apk" })
         ?.getString("browser_download_url")
-        ?: error("La versión más reciente todavía no tiene un APK disponible.")
+        ?: return null
     require(isTrustedDownload(downloadUrl)) { "GitHub devolvió un enlace de descarga no válido." }
-    return AppUpdate(latestVersion, downloadUrl)
+    val changelog = json.optString("body").lineSequence()
+        .map(String::trim)
+        .filter { it.startsWith("- ") || it.startsWith("* ") }
+        .map { it.drop(2).trim().take(160) }
+        .filter(String::isNotBlank)
+        .take(5).toList()
+    return AppUpdate(latestVersion, downloadUrl, changelog)
 }
 
 internal fun updateFromReleaseLocation(currentVersion: String, location: String): AppUpdate? {
@@ -171,11 +179,16 @@ internal fun updateFromReleaseLocation(currentVersion: String, location: String)
         "GitHub devolvió una versión no válida."
     }
     if (!isNewerVersion(currentVersion, latestVersion)) return null
+    val usesEditions = latestVersion.substringBefore('.').toInt() >= 2
+    if (BuildConfig.UNIVERSAL_BIBLE && !usesEditions) return null
     val downloadUrl = "https://github.com/csandino11/Senda/releases/download/" +
-        "v$latestVersion/Senda-$latestVersion.apk"
+        "v$latestVersion/${if (usesEditions) releaseApkName(latestVersion) else "Senda-$latestVersion.apk"}"
     require(isTrustedDownload(downloadUrl)) { "El enlace alternativo de descarga no es válido." }
     return AppUpdate(latestVersion, downloadUrl)
 }
+
+private fun releaseApkName(version: String): String =
+    "Senda-$version-${if (BuildConfig.UNIVERSAL_BIBLE) "Universal" else "YouVersion"}.apk"
 
 private fun isTrustedDownload(url: String): Boolean {
     val uri = runCatching { URI(url) }.getOrNull() ?: return false

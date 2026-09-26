@@ -4,6 +4,21 @@ Aplicación Android nativa para crear y seguir un recorrido completo de lectura 
 desde el día de su creación. El plan y su progreso funcionan localmente; la red solo se
 usa para comprobar actualizaciones.
 
+## Versión 2.0.0
+
+- El usuario elige 1–4 capítulos de lunes a viernes y 1–3 los fines de semana.
+- Salmos y Evangelios pueden leerse una o dos veces; Proverbios, de una a cuatro.
+- Los capítulos de 60 o más versículos se limitan a uno por semana y, cuando
+  corresponde, reducen a dos las lecturas de ese día.
+- La vista Semana se ha retirado. Se mantienen Día y Mes.
+- Seis iconos de inicio coordinados con los colores de énfasis y tres fondos
+  optimizados por temática, intercambiables desde Avanzado.
+- Dos variantes: YouVersion y Biblia universal. Esta última reconoce diez apps
+  bíblicas. Solo ciertas apps ofrecen enlaces directos fiables; para las demás se
+  abre el lector y se copia la referencia.
+- «Acerca de» muestra versión, autor (jucenm) y búsqueda manual de actualizaciones.
+- Las notificaciones de actualización muestran hasta cinco cambios de la versión.
+
 ## Versión 1.7.1
 
 - Fondo temático extendido a toda la vista Día, incluida su cabecera.
@@ -70,19 +85,23 @@ usa para comprobar actualizaciones.
 Requisitos: JDK 17 y Android SDK 37.
 
 ```powershell
-.\gradlew.bat testDebugUnitTest assembleRelease lintRelease
+.\gradlew.bat testYouversionDebugUnitTest testUniversalDebugUnitTest
+.\gradlew.bat assembleYouversionRelease assembleUniversalRelease
+.\gradlew.bat lintYouversionRelease lintUniversalRelease
 ```
 
-El APK optimizado se genera en `app/build/outputs/apk/release/app-release.apk`.
+Los APK optimizados se generan en `app/build/outputs/apk/youversion/release/` y
+`app/build/outputs/apk/universal/release/`.
 
 En equipos con memoria limitada, conviene ejecutar las tres tareas por separado con
 `--no-daemon --max-workers=1`.
 
 ## Decisión matemática documentada
 
-Después de aplicar las exclusiones y repeticiones, el recorrido contiene exactamente
-1.407 capítulos sin deuterocanónicos y 1.497 al incluirlos. Los ritmos distribuyen esa
-misma cobertura en 520/558, 380/408 o 300/322 días, respectivamente.
+En v2 la cantidad total de lecturas depende del canon y de los ciclos opcionales.
+El generador calcula la duración a partir de esa cantidad y de los límites diarios,
+sin adelantar la fecha de finalización mediante lecturas extras. Los planes de
+versiones anteriores se mantienen compatibles.
 
 La estimación de capítulos extensos usa conteos de versículos de conjuntos KJV
 [canónico](https://github.com/renniemaharaj/kjv-bible) y

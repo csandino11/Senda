@@ -14,8 +14,10 @@ import com.senda.lecturabiblica.data.UpdateRepository
 import com.senda.lecturabiblica.data.UpdateDownloadStatus
 import com.senda.lecturabiblica.domain.PlanGenerator
 import com.senda.lecturabiblica.domain.bibleTranslations
+import com.senda.lecturabiblica.domain.universalBibleApps
 import com.senda.lecturabiblica.model.DayStatus
 import com.senda.lecturabiblica.model.ProgressStats
+import com.senda.lecturabiblica.model.PlanPreferences
 import com.senda.lecturabiblica.model.ReadingPace
 import com.senda.lecturabiblica.model.ReadingPlan
 import com.senda.lecturabiblica.model.endDate
@@ -40,13 +42,16 @@ data class AppUiState(
     val accent: String = "cielo",
     val fontSize: String = "normal",
     val dynamicBackground: Boolean = false,
+    val backgroundVariant: Int = 0,
     val bibleVersion: String = "RVC",
+    val preferredBibleApp: String = "AUTO",
     val savingBackup: Boolean = false,
     val savedBackup: SavedPlanBackup? = null,
     val pendingRestore: Uri? = null,
     val restoringBackup: Boolean = false,
     val notice: String? = null,
     val availableUpdate: AppUpdate? = null,
+    val checkingUpdates: Boolean = false,
     val updateDownload: UpdateDownloadUiState? = null,
     val currentDate: LocalDate = LocalDate.now(),
 )
@@ -81,11 +86,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     plan = validPlan, completed = if (validPlan == null) emptySet() else store.completed(),
                     loading = false, themeMode = store.themeMode(), accent = store.accent(),
                     fontSize = store.fontSize(), dynamicBackground = store.dynamicBackground(),
+                    backgroundVariant = store.backgroundVariant(),
                     bibleVersion = store.bibleVersion().takeIf { saved -> bibleTranslations.any { it.id == saved } } ?: "RVC",
+                    preferredBibleApp = store.preferredBibleApp(),
                     pendingRestore = current.pendingRestore,
                     currentDate = today,
                 )
             }
+            runCatching { LauncherIconManager.apply(application, store.accent()) }
             restoreUpdateDownload()
             checkForUpdates()
         }
@@ -94,7 +102,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun generate(
         theme: String,
         includeDeuterocanon: Boolean,
-        pace: ReadingPace,
+        preferences: PlanPreferences,
         replace: Boolean,
         bibleVersion: String,
     ) {
@@ -103,7 +111,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.Default) {
-                    PlanGenerator.generate(LocalDate.now(), theme, includeDeuterocanon, pace)
+                    PlanGenerator.generate(LocalDate.now(), theme, includeDeuterocanon, preferences)
                 }
             }.onSuccess { plan ->
                 withContext(Dispatchers.IO) {
@@ -170,6 +178,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         if (fontSize !in setOf("normal", "large")) return
         store.saveAppearance(mode, accent, fontSize, dynamicBackground)
+        if (accent != mutableState.value.accent) {
+            runCatching { LauncherIconManager.apply(getApplication(), accent) }
+        }
         mutableState.update {
             it.copy(
                 themeMode = mode,
@@ -180,10 +191,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun renewBackground() {
+        val next = (mutableState.value.backgroundVariant + 1) % 3
+        store.saveBackgroundVariant(next)
+        mutableState.update { it.copy(backgroundVariant = next, dynamicBackground = true) }
+        store.saveAppearance(
+            mutableState.value.themeMode,
+            mutableState.value.accent,
+            mutableState.value.fontSize,
+            true,
+        )
+    }
+
     fun setBibleVersion(version: String) {
         if (bibleTranslations.none { it.id == version }) return
         store.saveBibleVersion(version)
         mutableState.update { it.copy(bibleVersion = version) }
+    }
+
+    fun setPreferredBibleApp(packageName: String) {
+        if (packageName != "AUTO" && universalBibleApps.none { it.packageName == packageName }) return
+        store.savePreferredBibleApp(packageName)
+        mutableState.update { it.copy(preferredBibleApp = packageName) }
     }
 
     fun savePlanBackup() {
@@ -434,6 +463,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun showError(message: String) = mutableState.update { it.copy(error = message) }
 
     fun clearError() = mutableState.update { it.copy(error = null) }
+
+    fun checkForUpdatesNow() {
+        if (!updateCheckRunning.compareAndSet(false, true)) return
+        mutableState.update { it.copy(checkingUpdates = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                runCatching(updates::findUpdate).onSuccess { update ->
+                    store.markUpdateChecked(LocalDate.now().toEpochDay())
+                    mutableState.update {
+                        it.copy(
+                            checkingUpdates = false,
+                            availableUpdate = update,
+                            notice = if (update == null) "Ya tienes la versión más reciente de Senda." else null,
+                        )
+                    }
+                }.onFailure { cause ->
+                    mutableState.update { it.copy(
+                        checkingUpdates = false,
+                        error = cause.message ?: "No se pudo comprobar si hay actualizaciones.",
+                    ) }
+                }
+            } finally {
+                updateCheckRunning.set(false)
+            }
+        }
+    }
 
     private fun checkForUpdates() {
         val day = LocalDate.now().toEpochDay()

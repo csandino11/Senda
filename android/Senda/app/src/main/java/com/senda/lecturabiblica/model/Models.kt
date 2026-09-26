@@ -34,7 +34,26 @@ data class ReadingPlan(
     val days: List<DayPlan>,
     val startDate: LocalDate = LocalDate.of(year, 1, 1),
     val pace: ReadingPace = ReadingPace.LEGACY,
+    val preferences: PlanPreferences? = null,
 )
+
+data class PlanPreferences(
+    val weekdayChapters: Int = 3,
+    val weekendChapters: Int = 2,
+    val repeatPsalms: Boolean = true,
+    val proverbCycles: Int = 4,
+    val repeatGospels: Boolean = true,
+) {
+    init {
+        require(weekdayChapters in 1..4)
+        require(weekendChapters in 1..3)
+        require(proverbCycles in 1..4)
+    }
+
+    val psalmCycles: Int get() = if (repeatPsalms) 2 else 1
+    val gospelCycles: Int get() = if (repeatGospels) 2 else 1
+    val chaptersPerWeek: Int get() = weekdayChapters * 5 + weekendChapters * 2
+}
 
 enum class ReadingPace(
     val id: String,
