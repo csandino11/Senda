@@ -4,6 +4,9 @@ Senda es una aplicación Android de lectura bíblica en español. Genera un reco
 personal que comienza el día de su creación, conecta lecturas relacionadas, adapta la
 carga diaria al ritmo elegido y guarda todo el progreso localmente en el dispositivo.
 
+La nueva [Senda web instalable](senda-web/README.md) funciona en iPhone, iPad, Mac
+y navegadores de escritorio. Es independiente del prototipo web inicial.
+
 [Descargar la versión más reciente](https://github.com/csandino11/Senda/releases/latest)
 
 ## Características

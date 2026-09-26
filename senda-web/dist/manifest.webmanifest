@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Senda · Lectura bíblica",
+  "short_name": "Senda",
+  "description": "Un plan personal para leer la Biblia a tu ritmo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f8",
+  "theme_color": "#f4f7f8",
+  "icons": [
+    {"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
