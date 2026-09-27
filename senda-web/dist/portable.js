@@ -16,20 +16,26 @@ const latin=s=>Array.from(s.normalize('NFC')).map(ch=>{if(ch==='–')return Stri
 const safe=s=>latin(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(n=>n.toFixed(3)).join(' ');
 const pdfBytes=objects=>{const parts=[pdfEncoded('%PDF-1.4\n%âãÏÓ\n')],offsets=[0];let size=parts[0].length;objects.forEach((object,i)=>{offsets.push(size);const raw=pdfEncoded(`${i+1} 0 obj\n${object}\nendobj\n`);parts.push(raw);size+=raw.length;});const xref=size;const tail=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;parts.push(ascii(tail));const out=new Uint8Array(parts.reduce((sum,p)=>sum+p.length,0));let at=0;for(const p of parts){out.set(p,at);at+=p.length;}return out;};
-function drawText(text,x,y,font,size,color){return `${color} rg BT /${font} ${size} Tf 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${safe(text)}) Tj ET\n`;}
+function drawText(text,x,y,font,size,color,scale=100){return `${color} rg BT /${font} ${size} Tf ${scale.toFixed(1)} Tz 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${safe(text)}) Tj ET\n`;}
 function rect(x,y,w,h,color){return `${color} rg ${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f\n`;}
 const formatPdfDate=date=>{const [year,month,day]=date.split('-');return `${day}-${month}-${year}`;};
 const glyphWidths={A:667,B:667,C:722,D:722,E:667,F:611,G:778,H:722,I:278,J:500,K:667,L:556,M:833,N:722,O:778,P:667,Q:778,R:722,S:667,T:611,U:722,V:667,W:944,X:667,Y:667,Z:611,a:556,b:556,c:500,d:556,e:556,f:278,g:556,h:556,i:222,j:222,k:500,l:222,m:833,n:556,o:556,p:556,q:556,r:333,s:500,t:278,u:556,v:500,w:722,x:500,y:500,z:500,' ':278,'-':333,'.':278,',':278,':':278,'/':278};
 function textWidth(text,size,bold=false){let width=0;for(const char of text.normalize('NFD').replace(/[\u0300-\u036f]/g,'')){width+=glyphWidths[char]??(/[0-9]/.test(char)?556:char==='–'?556:556);}return width*size*(bold?1.03:1)/1000;}
-function wrapReadings(refs,maxWidth,size){const lines=[];let current='';for(const ref of refs){const next=current?`${current}, ${ref}`:ref;if(current&&textWidth(next,size)>maxWidth){lines.push(current);current=ref;}else current=next;}if(current)lines.push(current);return lines;}
+function fittedText(text,x,y,font,size,color,width){const scale=Math.min(100,100*width/textWidth(text,size,font==='F2'));if(scale<52)throw Error(`El texto ${text} no cabe en el PDF.`);return drawText(text,x,y,font,size,color,scale);}
+function dayParts(date,width,size){const [year,month,day]=date.split('-').map(Number),monthName=new Intl.DateTimeFormat('es',{month:'long',timeZone:'UTC'}).format(new Date(Date.UTC(year,month-1,day))),first=`${day} ${monthName}`;return textWidth(first,size)<=width?[first,String(year)]:[String(day),monthName,String(year)];}
+function groupedReadings(readings){const groups=new Map();for(const reading of readings){const name=bookById[reading.book].name;if(!groups.has(name))groups.set(name,[]);groups.get(name).push(reading.chapter);}return [...groups].map(([name,chapters])=>({name,chapters:chapters.join(', ')}));}
+function splitBookName(name,size){const words=name.split(' ');let best=null;for(let at=1;at<words.length;at++){const left=words.slice(0,at).join(' '),right=words.slice(at).join(' '),width=Math.max(textWidth(left,size),textWidth(right,size));if(!best||width<best.width)best={left,right,width};}return best;}
+function readingLines(groups,width,size){let spare=4-groups.length;const lines=[];for(const group of groups){const split=spare>0&&textWidth(group.name,size)>width?splitBookName(group.name,size):null;if(split&&split.width<textWidth(group.name,size)*.8){lines.push({name:split.left,chapters:''},{name:split.right,chapters:group.chapters});spare--;}else lines.push(group);}return lines;}
 export function createPlanPdf(plan,from,large,accent){
  validatePlan(plan);
  const first=plan.days.findIndex(day=>day.date>=from);
  if(first<0)throw Error('El plan ya finalizó.');
  const selected=plan.days.slice(first,first+40);
- const W=612,H=792,margin=24,gap=12,columns=2,rows=10,cell=(W-margin*2-gap)/columns,tableTop=729,barHeight=28,tableBottom=58,rowHeight=(tableTop-barHeight-tableBottom)/rows,dateWidth=93;
- const bodySize=large?16:12,titleSize=large?20:18,headerSize=bodySize,leading=large?18:14;
- const accentRgb=rgb(accent),dark='0.13 0.19 0.20',muted='0.33 0.39 0.40',line='0.80 0.86 0.86',white='1 1 1';
+ const W=612,H=792,margin=20,gap=10,columns=2,rows=10,cell=(W-margin*2-gap)/columns,tableTop=729,barHeight=27,tableBottom=55,rowHeight=(tableTop-barHeight-tableBottom)/rows,dateWidth=89,bookWidth=116,chapterWidth=cell-dateWidth-bookWidth;
+ const bodySize=large?16:12,titleSize=large?20:18,headerSize=bodySize,leading=large?15.5:14.5;
+ const accentRgb=rgb(accent),dark='0.13 0.19 0.20',muted='0.33 0.39 0.40',line='0.82 0.82 0.82',white='1 1 1';
+ const tint=[1,3,5].map(i=>1-(1-parseInt(accent.slice(i,i+2),16)/255)*.15).map(n=>n.toFixed(3)).join(' ');
+ const grid=[1,3,5].map(i=>1-(1-parseInt(accent.slice(i,i+2),16)/255)*.34).map(n=>n.toFixed(3)).join(' ');
  const footerLeft=`${formatPdfDate(plan.startDate)} - ${formatPdfDate(selected.at(-1).date)}`,footerRight=themesName(plan.theme),title='PLAN DE LECTURA – SENDA';
  const split=Math.ceil(selected.length/2),pageDays=[selected.slice(0,split),selected.slice(split)],pages=[];
  for(let pageIndex=0;pageIndex<2;pageIndex++){
@@ -37,26 +43,21 @@ export function createPlanPdf(plan,from,large,accent){
   let content=rect(0,0,W,H,white);
   content+=drawText(title,(W-textWidth(title,titleSize,true))/2,755,'F2',titleSize,dark);
   for(let column=0;column<columns;column++){
-   const x=margin+column*(cell+gap),barY=tableTop-barHeight,readingX=x+dateWidth+7,maxReadingWidth=cell-dateWidth-14;
+   const x=margin+column*(cell+gap),barY=tableTop-barHeight,bookX=x+dateWidth+3,chapterX=x+dateWidth+bookWidth+3;
    content+=rect(x,barY,cell,barHeight,accentRgb);
-   content+=drawText('FECHA',x+7,barY+7,'F2',headerSize,white);
-   content+=drawText('LECTURAS',readingX,barY+7,'F2',headerSize,white);
+   content+=fittedText('Fechas',x+5,barY+6,'F2',headerSize,white,dateWidth-8);
+   content+=fittedText('Libros',bookX,barY+6,'F2',headerSize,white,bookWidth-6);
+   content+=fittedText('Capítulos',chapterX,barY+6,'F2',headerSize,white,chapterWidth-4);
    for(let row=0;row<rows;row++){
     const day=row<perColumn?page[column*perColumn+row]:undefined,y=barY-(row+1)*rowHeight,top=y+rowHeight;
-    content+=rect(x,y,cell,rowHeight,row%2?'0.97 0.98 0.98':white);
-    content+=`${line} RG 0.5 w ${x.toFixed(1)} ${y.toFixed(1)} m ${(x+cell).toFixed(1)} ${y.toFixed(1)} l S\n`;
-    content+=`${line} RG 0.4 w ${(x+dateWidth).toFixed(1)} ${y.toFixed(1)} m ${(x+dateWidth).toFixed(1)} ${top.toFixed(1)} l S\n`;
+    content+=rect(x,y,cell,rowHeight,row%2?tint:white);
+    content+=`${grid} RG 0.5 w ${x.toFixed(1)} ${y.toFixed(1)} m ${(x+cell).toFixed(1)} ${y.toFixed(1)} l S\n`;
+    for(const divider of [dateWidth,dateWidth+bookWidth])content+=`${grid} RG 0.5 w ${(x+divider).toFixed(1)} ${y.toFixed(1)} m ${(x+divider).toFixed(1)} ${top.toFixed(1)} l S\n`;
     if(!day)continue;
-    const baseline=top-(large?20:17);
-    content+=drawText(formatPdfDate(day.date),x+6,baseline,'F1',bodySize,dark);
-    let refs=day.readings.map(r=>`${large?bookById[r.book].short:bookById[r.book].name} ${r.chapter}`);
-    let lines=wrapReadings(refs,maxReadingWidth,bodySize);
-    if(lines.length>(large?3:4)){
-     refs=day.readings.map(r=>`${bookById[r.book].short} ${r.chapter}`);
-     lines=wrapReadings(refs,maxReadingWidth,bodySize);
-    }
-    if(lines.length>(large?3:4))throw Error(`Las lecturas del ${day.date} no caben en el PDF.`);
-    lines.forEach((reading,index)=>{content+=drawText(reading,readingX,baseline-index*leading,'F1',bodySize,dark);});
+    const baseline=top-(large?14:16),dateLines=dayParts(day.date,dateWidth-8,bodySize),groups=groupedReadings(day.readings),readingRows=readingLines(groups,bookWidth-6,bodySize);
+    if(readingRows.length>4)throw Error(`Las lecturas del ${day.date} no caben en el PDF.`);
+    dateLines.forEach((part,index)=>{content+=fittedText(part,x+4,baseline-index*leading,'F1',bodySize,dark,dateWidth-8);});
+    readingRows.forEach(({name,chapters},index)=>{const lineY=baseline-index*leading;content+=fittedText(name,bookX,lineY,'F1',bodySize,dark,bookWidth-6);if(chapters)content+=fittedText(chapters,chapterX,lineY,'F1',bodySize,dark,chapterWidth-6);});
    }
   }
   content+=`${line} RG 0.6 w ${margin} 45 m ${W-margin} 45 l S\n`;

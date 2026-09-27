@@ -9,11 +9,11 @@ plan es Senda Android 2.0.0, no `app/`, `lib/` ni la antigua API web del reposit
 La misma URL, datos y funciones se presentan según el sistema operativo: navegación
 flotante y superficies de control inspiradas en Liquid Glass en iOS, iPadOS y macOS;
 capas, barra de comandos y geometría inspiradas en Fluent para Windows. Se adapta
-también al ancho de pantalla: barra inferior en iPhone, barra lateral en iPad/Mac/PC.
+también al ancho de pantalla: barra inferior en móviles, barra lateral en iPad/Mac/PC.
 Son interpretaciones CSS, no los materiales nativos del sistema, que una web no puede
 invocar directamente. Si no se detecta Apple o Windows se usa el estilo web neutro.
-Para revisión local se puede agregar `?preview-platform=apple` o
-`?preview-platform=windows`; este parámetro solo se atiende en localhost.
+Para revisión local se puede agregar `?preview-platform=apple`,
+`?preview-platform=windows` o `?preview-platform=android`; este parámetro solo se atiende en localhost.
 
 ## Funciones
 
@@ -24,11 +24,14 @@ Para revisión local se puede agregar `?preview-platform=apple` o
   registrar lecturas completas o parciales, seguimiento por capítulo, estadísticas,
   paletas, tamaño de letra, modo claro/oscuro y fondos temáticos renovables. La
   navegación aparece cuando hay un plan activo.
+- Para personas nuevas, Lumbre, letra Grande y fondo dinámico son los valores
+  iniciales; los ajustes ya guardados por cada persona se conservan.
 - Traducciones YouVersion RVC, NTV, TLAI, PDT, NBV y Personalizado. Las lecturas
   deuterocanónicas fuerzan TLAI.
 - PDF local de los 40 días desde la descarga (o hasta el final del plan), en dos
   páginas carta de hasta 20 días cada una, con cuerpo de 12 pt en Normal o 16 pt en Grande.
-  Sus tablas usan el color de énfasis y muestran fecha y lecturas. Tras prepararlo, la app
+  Sus tablas usan el color de énfasis y muestran fechas, nombres completos de libros
+  y capítulos en columnas. Tras prepararlo, la app
   ofrece descarga directa, vista previa y, si el navegador lo permite, compartirlo
   o guardarlo mediante el diálogo nativo. Algunos navegadores integrados bloquean
   las descargas; en ese caso se recomienda abrir la web en Safari o Chrome.
@@ -38,6 +41,9 @@ Para revisión local se puede agregar `?preview-platform=apple` o
   es la forma de trasladarlos a otro dispositivo o protegerlos antes de borrar datos.
 - Service worker con aplicación, canon y 21 fondos disponibles sin conexión. Los
   enlaces a YouVersion aún necesitan conexión, salvo contenido guardado allí.
+- En Android, la opción de descarga recomienda la app nativa y consulta al abrirse
+  el APK YouVersion de la última publicación de GitHub. Si GitHub no responde,
+  enlaza a la página de la última versión para evitar ofrecer un APK desactualizado.
 
 ## Enlaces de YouVersion en Apple
 
